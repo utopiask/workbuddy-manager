@@ -24,9 +24,13 @@
 # **不要**为了“简化”把所有分组塞进同一个实例——那会改变分组语义。
 #
 # 与宿主机安装（deploy/install.sh + systemd）的区别，见 Dockerfile 顶部说明。
-# 简述：容器版**能**在界面上更新上游 —— 镜像内置了 docker CLI 与 compose 插件，
-# 挂上 docker.sock 后即可在容器内重建上游容器（见下方 volumes 的说明）。
-# 不挂 docker.sock 时那几项会降级为「请到宿主机操作」，界面如实提示。
+# 简述：网关源码随仓库 `gateway/`（发布包内为 `upstream/`）分发，更新方式是在仓库里
+# `git pull && docker compose up -d --build`。面板仍能做账号管理——它读写与网关共享的
+# `workbuddy2api-data/`（config.json 与 auths/）；挂了 docker.sock 后还能在面板里
+# `docker restart workbuddy2api` 让配置改动生效、并读上游日志。
+# 注意：面板里原「更新上游源码」依赖一个可 `git pull` 的上游仓库目录，而这里
+# WB_UPSTREAM_DIR 指向的是共享数据目录，因此该功能在本拓扑下不可用。
+# 不挂 docker.sock 时，依赖 docker 的功能会降级为「请到宿主机操作」，界面如实提示。
 
 services:
   # ── 网关（Go 反代）：仅 compose 内网 ──────────────────────────

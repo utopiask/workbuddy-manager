@@ -507,16 +507,25 @@ update the code manually and restart the service instead.
 
 ### 3. Docker
 
-The repo ships a `Dockerfile` and `docker-compose.yml` for users already running the
-upstream in Docker:
+The repo ships a `Dockerfile` and `docker-compose.yml`: one stack starts both the
+**console** and the **gateway** (the gateway is internal-only, reached by the console at
+`http://workbuddy2api:7863`):
 
 ```bash
 git clone https://github.com/ithtelab/workbuddy-manager.git
 cd workbuddy-manager
-# Adjust WB2API_BASE and volume paths if needed (defaults assume upstream at ../workbuddy2api)
+
+# Prepare the gateway's data dir and config first (compose does not create them; a
+# config.json that is a directory makes the gateway fail to start)
+mkdir -p workbuddy2api-data/auths workbuddy2api-data/data
+cp gateway/config.example.json workbuddy2api-data/config.json   # fill in api_key etc.
+
 docker compose up -d --build
 docker compose logs workbuddy-manager | grep -A2 password   # first-boot random password
 ```
+
+> When deploying from a release tarball the gateway source lives in `upstream/`: use
+> `cp upstream/config.example.json workbuddy2api-data/config.json` instead.
 
 > **The frontend is built inside the image automatically.** `web/out` (the frontend
 > build output) is not committed, so a fresh `git clone` does not contain it. If the
@@ -566,14 +575,15 @@ docker pull ghcr.io/<your-username>/workbuddy-manager-multiarch:latest
 > Docker Hub at the same time (two secrets enable it automatically). Full details in
 > [deploy/fork-image/README.md](deploy/fork-image/README.md).
 
-**The container build has the same capabilities as a host install** — the compose file
-mounts three things to make that true:
+**The container build differs only slightly from a host install** — the compose file mounts
+the three things below; the one difference is that updating the gateway source is now done
+with `git pull && docker compose up -d --build` in the repo:
 
 | Mount | Purpose |
 |---|---|
-| Upstream repo directory | Read its compose file for port confinement; `git pull` to update it; read/write `config.json` and `auths/` (**adding an account writes to auths**, so it cannot be read-only) |
-| `./data` | Database, logs, update state. Must be persisted |
-| `/var/run/docker.sock` | Lets the console inside the container restart/rebuild the upstream container — i.e. "update upstream", "auto-reload after saving settings" and "read upstream logs" |
+| `workbuddy2api-data/` | The gateway's shared data dir (`config.json` + `auths/` + `data/`): the console writes, the gateway reads — the same files on both sides. **Adding an account writes to auths**, so it cannot be read-only |
+| `./data` | The console's own database, logs, update state. Must be persisted |
+| `/var/run/docker.sock` | Lets the console inside the container `docker restart workbuddy2api` — i.e. "auto-reload after saving settings" and "read upstream logs" |
 
 > **On mounting docker.sock**: it grants this container host-root privileges. But this is
 > **not a new risk level** — a host install already runs as root (the systemd unit has no

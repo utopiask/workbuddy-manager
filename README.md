@@ -450,15 +450,23 @@ powershell -ExecutionPolicy Bypass -File .\service-tools.ps1 start
 
 ### 三、Docker 部署
 
-仓库自带 `Dockerfile` 与 `docker-compose.yml`，适合已经用 Docker 跑上游的用户：
+仓库自带 `Dockerfile` 与 `docker-compose.yml`：一个栈同时起**面板**与**网关**
+（网关仅在 compose 内网，面板经 `http://workbuddy2api:7863` 访问它）：
 
 ```bash
 git clone https://github.com/ithtelab/workbuddy-manager.git
 cd workbuddy-manager
-# 按需改 compose 里的 WB2API_BASE 与卷路径（默认假设上游在 ../workbuddy2api）
+
+# 先准备网关的数据目录与配置（compose 不会自动创建；config.json 若是目录，网关起不来）
+mkdir -p workbuddy2api-data/auths workbuddy2api-data/data
+cp gateway/config.example.json workbuddy2api-data/config.json   # 填好 api_key 等
+
 docker compose up -d --build
 docker compose logs workbuddy-manager | grep -A2 密码   # 首启随机密码
 ```
+
+> 用 Release 包部署时网关源码在 `upstream/`：把上面那条 `cp` 换成
+> `cp upstream/config.example.json workbuddy2api-data/config.json` 即可。
 
 > **前端会在镜像里自动构建**：`web/out`（前端产物）不入库，所以 `git clone` 得到的
 > 工作区里没有它。构建时若发现没有，就自动在容器内 `npm ci && next build`
@@ -500,13 +508,14 @@ docker pull ghcr.io/<你的用户名>/workbuddy-manager-multiarch:latest
 > 失败。也可以顺便推一份到 Docker Hub（加两个 Secret 即自动启用）。完整说明见
 > [deploy/fork-image/README.md](deploy/fork-image/README.md)。
 
-**容器版与宿主版的能力是一致的** —— compose 里默认挂载了三样东西让它们对齐：
+**容器版与宿主部署的差异很小** —— compose 默认挂载下面三样；唯一的区别是「更新上游
+源码」改由你在仓库里 `git pull && docker compose up -d --build`：
 
 | 挂载 | 作用 |
 |---|---|
-| 上游仓库目录 | 读上游 compose 做端口收敛；`git pull` 更新上游；读写 `config.json` 与 `auths/`（**扫码添加账号会写 auths**，所以不能只读） |
-| `./data` | 数据库、日志、更新状态。必须持久化 |
-| `/var/run/docker.sock` | 让容器内的管理端能重启/重建上游容器 —— 即「更新上游」「保存设置后自动重载」「读上游日志」 |
+| `workbuddy2api-data/` | 网关的共享数据目录（`config.json` + `auths/` + `data/`）：面板写、网关读，两边是同一份。**扫码添加账号会写 auths**，所以不能只读 |
+| `./data` | 面板自身的数据库、日志、更新状态。必须持久化 |
+| `/var/run/docker.sock` | 让容器内的管理端能 `docker restart workbuddy2api` —— 即「保存设置后自动重载」「读上游日志」 |
 
 > **关于 docker.sock 的取舍**：挂它等于把宿主 root 权限交给本容器。但这**不是新增的风险等级**——宿主部署时本服务本来就是 root 运行（systemd 单元无 `User=`、安装脚本要求 root），而 root 进程本来就能 `docker run -v /:/host` 拿到宿主文件系统，两者权限等价。
 > 若你的要求是最小权限，把那一行注释掉即可：依赖 docker 的功能会**自动降级为「请到宿主机操作」**，界面如实提示，不会静默失败。
