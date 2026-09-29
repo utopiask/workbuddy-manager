@@ -123,3 +123,11 @@ local-ops/
 LOCAL_DEPLOY_NOTES.md
 start-all.cmd
 stop-all.cmd
+
+# ── 网关组件（gateway/，原 workbuddy2api 源码）的运行时数据（严禁提交）──────
+# 网关代码已入库；真实凭据与运行数据只存在于部署目录（如 /opt/workbuddy2api），
+# 安装/升级时必须原样保留。上面的全局 data/ 与 config.json 本就覆盖，这里再显式
+# 锚定一遍：将来若放宽全局规则，也不会把这三样误提交。
+gateway/config.json
+gateway/auths/
+gateway/data/
