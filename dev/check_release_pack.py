@@ -85,6 +85,14 @@ def main() -> int:
     check(not (up / 'config.json').exists() and not (up / 'auths').exists()
           and not (up / 'data').exists(), '内嵌的 upstream/ 不含运行时数据与凭据')
 
+    # 包内根 compose 必须把网关构建上下文从仓库的 ./gateway 改写成 ./upstream ——
+    # 包里没有 gateway/ 目录，不改写会让 Docker 用户在发布包里 `docker compose up`
+    # 直接报找不到构建上下文（P2：仓库 gateway/ ↔ 发布包 upstream/ 的目录映射）。
+    packaged_compose = stage / 'docker-compose.yml'
+    compose_text = packaged_compose.read_text(encoding='utf-8') if packaged_compose.is_file() else ''
+    check('build: ./upstream' in compose_text, '包内 compose 从 ./upstream 构建网关')
+    check('build: ./gateway' not in compose_text, '包内 compose 不再引用 ./gateway')
+
     check((stage / '.version').is_file(), '.version 已写入')
     check((stage / 'server' / 'main.py').is_file(), 'server/ 已打包')
     check((stage / 'deploy' / 'install.sh').is_file(), 'deploy/install.sh 已打包')

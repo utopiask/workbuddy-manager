@@ -189,6 +189,14 @@ jobs:
                  "$STAGE/upstream/auths" "$STAGE/upstream/data"
           # 打包失败必须致命：不允许产出缺网关源码的发布包
           test -f "$STAGE/upstream/docker-compose.yml" || { echo "::error::gateway/ 未正确打包"; exit 1; }
+          # ── 改写包内 compose 的网关构建上下文 ────────────────────────
+          # 目录映射：仓库内 gateway/ → 发布包内 upstream/（见上一段 cp）。根 compose
+          # 里网关写的是 `build: ./gateway`，但包内网关源码在 upstream/ —— 不改写的话
+          # Docker 用户在发布包里 `docker compose up` 会报找不到 ./gateway（构建直接
+          # 失败）。这里改写为 ./upstream，与 install.sh 的目录口径保持一致。
+          sed -i 's#build: \./gateway#build: ./upstream#' "$STAGE/docker-compose.yml"
+          grep -q 'build: ./upstream' "$STAGE/docker-compose.yml" \
+            || { echo "::error::包内 compose 未改写为 build: ./upstream"; exit 1; }
           echo "已内嵌网关源码：$(find "$STAGE/upstream" -type f | wc -l) 个文件"
           # 写入版本标记：管理端「系统更新」页与安装流程据此显示当前版本
           echo "${TAG}" > "$STAGE/.version"

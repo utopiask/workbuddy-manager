@@ -47,3 +47,18 @@ class ReleaseWorkflowTest(unittest.TestCase):
         pack = next(s for s in steps if s.get('id') == 'pack')['run']
         self.assertIn('gateway', pack)
         self.assertIn('upstream', pack, '仍需产出包内 upstream/ 目录')
+
+    def test_pack_rewrites_gateway_build_context_for_package(self):
+        """仓库内开发目录 gateway/ 在发布包里叫 upstream/（Task 8 / Ruling P2）。
+
+        根 compose 里网关照 `build: ./gateway` 构建；发布包里没有 gateway/ 目录，
+        不改写的话 Docker 用户在包内 `docker compose up` 会因找不到构建上下文
+        直接失败。打包步骤必须把包内 compose 改写成 `build: ./upstream`。
+        """
+        steps = self.data['jobs']['release']['steps']
+        pack = next(s for s in steps if s.get('id') == 'pack')['run']
+        self.assertIn('docker-compose.yml', pack, '打包步骤没碰包内 compose')
+        # 必须真的执行替换（sed 之类），不能只在注释里提一句
+        self.assertRegex(pack, r'sed[^\n]*gateway[^\n]*upstream',
+                         '打包步骤没有把包内 compose 的网关构建上下文改写为 upstream')
+        self.assertIn('build: ./upstream', pack, '未断言改写结果')
