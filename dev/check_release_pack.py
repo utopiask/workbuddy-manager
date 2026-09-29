@@ -30,7 +30,8 @@ def main() -> int:
 
     wf_path = ROOT / '.github' / 'workflows' / 'release.yml'
     data = yaml.safe_load(wf_path.read_text(encoding='utf-8'))
-    job = next(iter(data['jobs'].values()))
+    # workflow 已拆成 gateway/python/web/release 多个 job；打包步骤固定在 release job 内。
+    job = data['jobs']['release']
     step = next(s for s in job['steps'] if s.get('id') == 'pack')
     script = step['run']
     # 去掉 GitHub 表达式与本机没有的 zip，其余**原样执行**

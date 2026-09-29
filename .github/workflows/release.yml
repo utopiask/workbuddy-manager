@@ -5,6 +5,9 @@
 #
 # 产物为可直接部署的压缩包（含 server/ 与已构建的 web/out/）。
 #
+# 结构：gateway / python / web 三个 job 是发布闸门（任一失败则不发布），
+# 第四个 job `release` 通过 needs 依赖三者，负责打包、建 Release 与推镜像。
+#
 # ── 关于签名（重要）──────────────────────────────────────────
 # 本工作流**不持有签名私钥**，也不代替维护者签名：
 #   * 私钥绝不进 CI —— 恶意 PR 合并后能改 workflow 里的任意步骤，
@@ -34,24 +37,54 @@ permissions:
   packages: write
 
 jobs:
-  release:
+  # ── 闸门 1：Go 网关（Task 1 引入的 gateway/ 模块）────────────────
+  # 版本以 gateway/go.mod 为准（1.22.5），避免 CI 与本地 go.mod 漂移。
+  gateway:
     runs-on: ubuntu-latest
     steps:
-      - name: 解析版本号
-        id: vars
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
-
       - uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
         with:
-          ref: ${{ steps.vars.outputs.tag }}
-          fetch-depth: 0
+          go-version-file: gateway/go.mod
+          cache-dependency-path: gateway/go.sum
+
+      - name: Go vet
+        working-directory: gateway
+        run: go vet ./...
+
+      - name: Go 单元测试
+        working-directory: gateway
+        run: go test ./...
+
+  # ── 闸门 2：后端 Python 测试 ─────────────────────────────────────
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 后端语法与导入自检
+        run: |
+          python3 -m compileall -q server
+          echo "后端语法检查通过"
+
+      - name: 后端单元测试
+        run: |
+          python3 -m pip install --quiet -r server/requirements.txt
+          python3 -m unittest discover -s server/tests -t . -v
+
+  # ── 闸门 3：前端构建 ────────────────────────────────────────────
+  # 只构建并上传 web/out 作为 artifact；打包与发布在 release job 完成。
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - name: 安装 Node
         uses: actions/setup-node@v4
@@ -74,15 +107,39 @@ jobs:
           test -f web/out/index.html || { echo "构建失败：缺少 web/out/index.html"; exit 1; }
           echo "构建产物大小：$(du -sh web/out | cut -f1)"
 
-      - name: 后端语法与导入自检
-        run: |
-          python3 -m compileall -q server
-          echo "后端语法检查通过"
+      - name: 上传前端构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-out
+          path: web/out
+          if-no-files-found: error
 
-      - name: 后端单元测试
+  # ── 发布：三个闸门都通过后才执行 ─────────────────────────────────
+  release:
+    needs: [gateway, python, web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 解析版本号
+        id: vars
         run: |
-          python3 -m pip install --quiet -r server/requirements.txt
-          python3 -m unittest discover -s server/tests -t . -v
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.vars.outputs.tag }}
+          fetch-depth: 0
+
+      - name: 下载前端构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: web-out
+          path: web/out
 
       - name: 组装发布目录
         id: pack
