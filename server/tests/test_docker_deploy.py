@@ -951,22 +951,29 @@ class UpstreamSourceFallbackTest(unittest.TestCase):
         self.assertIn('UPSTREAM_SRC="$BUNDLED"', self.sh,
                       '检测到了包内源码却没接到 UPSTREAM_SRC —— 等于没检测')
 
-    def test_release_workflow_embeds_upstream_source(self) -> None:
-        """发布流程要把上游源码塞进包里，且**取不到时不阻断发布**。
+    def test_release_workflow_embeds_gateway_from_repo(self) -> None:
+        """发布流程从仓库 gateway/ 内嵌网关源码，且**打包失败即致命**。
 
-        上游源码不放进本仓库，所以「随包分发」是用户拿到源码
-        的唯一常规渠道。两步都不能少：
-          · 从固定的载体 Release 取（tag upstream-src，标 pre-release 才行——
-            否则它会成为 releases/latest，把面板的更新检查带偏）；
-          · 取不到只记 warning 继续打包（否则一次网络抖动就让整个发布失败）。
+        网关源码已随仓库落地为 gateway/，发布包内沿用 upstream/ 目录名
+        供 install.sh / update.py 对接。载体 Release 链路（upstream-src）已退役，
+        不得再出现在工作流里；源码内的运行时数据与凭据也必须在打包时排除。
+        少了致命校验就会产出缺网关源码的空包，新装用户于是装不上。
         """
         import yaml
         wf = (_ROOT / '.github' / 'workflows' / 'release.yml').read_text(encoding='utf-8')
         yaml.safe_load(wf)   # 先确保 YAML 没写坏
-        self.assertIn('releases/download/upstream-src/workbuddy2api-src.tar.gz', wf,
-                      '没有从载体 Release 取上游源码')
-        self.assertIn("$STAGE/upstream", wf, '取回来的源码没有放进发布目录')
-        self.assertIn('::warning::', wf, '取不到源码时会直接失败 —— 应该只告警')
+        self.assertIn('cp -r gateway "$STAGE/upstream"', wf,
+                      '没有从仓库 gateway/ 内嵌网关源码到包内 upstream/')
+        for excluded in ('$STAGE/upstream/.git', '$STAGE/upstream/config.json',
+                         '$STAGE/upstream/auths', '$STAGE/upstream/data'):
+            self.assertIn(excluded, wf, f'打包时没有排除 {excluded}')
+        self.assertIn('test -f "$STAGE/upstream/docker-compose.yml"', wf,
+                      '缺少「网关源码未打全」的致命校验')
+        self.assertIn('exit 1', wf, '打包失败没有退出 —— 会产出缺网关源码的发布包')
+        self.assertIn('::error::', wf, '打包失败缺少 ::error:: 标记')
+        # 载体链路已退役：不得再出现任何旧契约字样
+        for dead in ('upstream-src', 'workbuddy2api-src.tar.gz', 'UPSTREAM_SRC_URL'):
+            self.assertNotIn(dead, wf, f'仍在引用已退役的载体链路：{dead}')
 
     def test_clone_failure_lists_ways_out(self) -> None:
         """克隆失败要把三条退路写清楚——否则用户只看到 git 的 not found。"""
