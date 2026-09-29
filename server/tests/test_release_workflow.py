@@ -38,3 +38,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertTrue(checkouts, f'{name} 缺少 checkout 步骤')
             ref = (checkouts[0].get('with') or {}).get('ref')
             self.assertEqual(ref, expected, f'{name} 的 checkout ref 未按解析出的 tag')
+
+    def test_pack_maps_gateway_without_carrier(self):
+        wf = (ROOT/'.github'/'workflows'/'release.yml').read_text(encoding='utf-8')
+        self.assertNotIn('upstream-src', wf, '仍在从载体 Release 拉取上游源码')
+        self.assertNotIn('workbuddy2api-src.tar.gz', wf)
+        steps = self.data['jobs']['release']['steps']
+        pack = next(s for s in steps if s.get('id') == 'pack')['run']
+        self.assertIn('gateway', pack)
+        self.assertIn('upstream', pack, '仍需产出包内 upstream/ 目录')
