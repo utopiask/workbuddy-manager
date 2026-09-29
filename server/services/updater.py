@@ -495,7 +495,7 @@ _VERSION_CACHE_FILE = config.DATA_DIR / 'version-check.json'
 VERSION_CACHE_TTL = 6 * 3600          # 6 小时
 UPSTREAM_API_REPO = os.environ.get('WB_UPSTREAM_API_REPO') or 'Sliverkiss/workbuddy2api'
 # 管理端仓库（owner/name），用于查询最新 Release
-MANAGER_REPO = os.environ.get('WB_MANAGER_REPO') or 'ithtelab/workbuddy-manager'
+MANAGER_REPO = os.environ.get('WB_MANAGER_REPO') or 'utopiask/workbuddy-manager'
 _upstream_api_repo_cache: str | None = None
 
 

@@ -25,7 +25,7 @@
 **不需要联网取任何外部源码**：
 
 ```bash
-wget https://github.com/ithtelab/workbuddy-manager/releases/latest/download/workbuddy-manager-<版本>.tar.gz
+wget https://github.com/utopiask/workbuddy-manager/releases/latest/download/workbuddy-manager-<版本>.tar.gz
 tar xzf workbuddy-manager-*.tar.gz && cd workbuddy-manager-*
 sudo bash deploy/install.sh          # 自动使用包内的 upstream/
 ```
@@ -71,7 +71,7 @@ cd /opt/workbuddy2api && docker compose up -d --build
 
 ```bash
 # 1) 下载 Release 包（内含已构建的前端，无需 Node.js）
-wget https://github.com/ithtelab/workbuddy-manager/releases/latest/download/workbuddy-manager-<版本>.tar.gz
+wget https://github.com/utopiask/workbuddy-manager/releases/latest/download/workbuddy-manager-<版本>.tar.gz
 tar xzf workbuddy-manager-*.tar.gz
 cd workbuddy-manager-*
 
@@ -94,7 +94,7 @@ sudo bash deploy/install.sh
 ## 二、通过 git clone 部署
 
 ```bash
-git clone https://github.com/ithtelab/workbuddy-manager.git
+git clone https://github.com/utopiask/workbuddy-manager.git
 cd workbuddy-manager
 
 # 需先在 web/ 构建前端（git 仓库不含构建产物）

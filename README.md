@@ -20,9 +20,9 @@
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e)
 
-[![Release](https://img.shields.io/github/v/release/ithtelab/workbuddy-manager?color=22c55e&label=Release)](https://github.com/ithtelab/workbuddy-manager/releases)
+[![Release](https://img.shields.io/github/v/release/utopiask/workbuddy-manager?color=22c55e&label=Release)](https://github.com/utopiask/workbuddy-manager/releases)
 [![Changelog](https://img.shields.io/badge/更新日志-CHANGELOG-blue)](CHANGELOG.md)
-[![Issues](https://img.shields.io/github/issues/ithtelab/workbuddy-manager?color=f59e0b&label=反馈)](https://github.com/ithtelab/workbuddy-manager/issues)
+[![Issues](https://img.shields.io/github/issues/utopiask/workbuddy-manager?color=f59e0b&label=反馈)](https://github.com/utopiask/workbuddy-manager/issues)
 [![LINUX DO](https://img.shields.io/badge/社区-LINUX%20DO-1f6feb)](https://linux.do)
 
 [English](README.en.md) · **简体中文**
@@ -62,7 +62,7 @@
 - **上游专注自己的核心**：面板不要求上游为它改代码，让上游能保持精简
 
 欢迎参与共建：面板与上游源码的问题、想法都提到
-[本仓库](https://github.com/ithtelab/workbuddy-manager/issues)
+[本仓库](https://github.com/utopiask/workbuddy-manager/issues)
 （上游源码随本项目的发布包分发）。
 
 ---
@@ -404,7 +404,7 @@ python -m unittest discover -s server/tests -t . -v
 前提：`workbuddy2api` 已在本机运行，并有可用的启停脚本与文件日志。
 
 ```powershell
-git clone https://github.com/ithtelab/workbuddy-manager.git
+git clone https://github.com/utopiask/workbuddy-manager.git
 cd workbuddy-manager
 Copy-Item .env.example .env
 ```
@@ -453,7 +453,7 @@ powershell -ExecutionPolicy Bypass -File .\service-tools.ps1 start
 仓库自带 `Dockerfile` 与 `docker-compose.yml`，适合已经用 Docker 跑上游的用户：
 
 ```bash
-git clone https://github.com/ithtelab/workbuddy-manager.git
+git clone https://github.com/utopiask/workbuddy-manager.git
 cd workbuddy-manager
 # 按需改 compose 里的 WB2API_BASE 与卷路径（默认假设上游在 ../workbuddy2api）
 docker compose up -d --build
@@ -471,7 +471,7 @@ docker compose logs workbuddy-manager | grep -A2 密码   # 首启随机密码
 也可以直接用构建好的镜像（每次发版会推到 GHCR）：
 
 ```bash
-docker pull ghcr.io/ithtelab/workbuddy-manager:latest
+docker pull ghcr.io/utopiask/workbuddy-manager:latest
 ```
 
 > 镜像**同时提供 `linux/amd64` 与 `linux/arm64`**（Apple Silicon、ARM 云主机可直接拉取，
@@ -528,7 +528,7 @@ docker pull ghcr.io/<你的用户名>/workbuddy-manager-multiarch:latest
 
 ```bash
 # 推荐：用 Release 包（内含已构建的前端，无需 Node.js）
-wget https://github.com/ithtelab/workbuddy-manager/releases/latest/download/workbuddy-manager-<版本>.tar.gz
+wget https://github.com/utopiask/workbuddy-manager/releases/latest/download/workbuddy-manager-<版本>.tar.gz
 tar xzf workbuddy-manager-*.tar.gz && cd workbuddy-manager-*
 
 sudo bash deploy/install.sh
@@ -810,7 +810,7 @@ workbuddy-manager/
 1. **改掉初始密码**，不要沿用部署脚本中的默认值
 2. **务必经 HTTPS 访问**：7863 / 7864 建议只监听 `127.0.0.1`，由反向代理对外
 3. 如需前置 CDN，请把 `WB_TRUSTED_PROXY_HOPS` 设为 CDN + 反代的层数
-4. 发现问题请走[私密渠道](https://github.com/ithtelab/workbuddy-manager/security/advisories/new)，
+4. 发现问题请走[私密渠道](https://github.com/utopiask/workbuddy-manager/security/advisories/new)，
    **不要**公开提交 Issue
 
 > ⚠️ 公网暴露**必须**启用 HTTPS，否则会话 Cookie 与密码可被中间人窃取。
@@ -829,13 +829,13 @@ workbuddy-manager/
 ## 更新日志与反馈
 
 - **更新日志**：[CHANGELOG.md](CHANGELOG.md) —— 各版本的新增、修复与变更
-- **下载发布包**：[Releases](https://github.com/ithtelab/workbuddy-manager/releases) —— 每个版本提供可直接部署的
+- **下载发布包**：[Releases](https://github.com/utopiask/workbuddy-manager/releases) —— 每个版本提供可直接部署的
   `.tar.gz` / `.zip`（含已构建的前端产物），解压后执行 `sudo bash deploy/install.sh` 即可
-- **反馈问题**：[提交 Bug](https://github.com/ithtelab/workbuddy-manager/issues/new?template=bug_report.yml) ·
-  [功能建议](https://github.com/ithtelab/workbuddy-manager/issues/new?template=feature_request.yml)
+- **反馈问题**：[提交 Bug](https://github.com/utopiask/workbuddy-manager/issues/new?template=bug_report.yml) ·
+  [功能建议](https://github.com/utopiask/workbuddy-manager/issues/new?template=feature_request.yml)
 
 > 反馈时请附上版本号与错误日志，并**先移除其中的密钥、Token 等敏感信息**。
-> 上游 workbuddy2api 自身的问题也提到[本仓库](https://github.com/ithtelab/workbuddy-manager/issues)
+> 上游 workbuddy2api 自身的问题也提到[本仓库](https://github.com/utopiask/workbuddy-manager/issues)
 > ——上游源码随本项目的发布包分发。
 
 ### 版本发布流程

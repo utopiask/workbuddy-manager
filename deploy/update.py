@@ -57,7 +57,7 @@ INSTALL_DIR = Path(os.environ.get('WB_INSTALL_DIR') or Path(__file__).resolve().
 UPSTREAM_DIR = Path(os.environ.get('WB_UPSTREAM_DIR') or '/opt/workbuddy2api')
 UPSTREAM_PORT = int(os.environ.get('WB_UPSTREAM_PORT') or 7863)
 MANAGER_PORT = int(os.environ.get('WB_MANAGER_PORT') or 7864)
-MANAGER_REPO = os.environ.get('WB_MANAGER_REPO') or 'ithtelab/workbuddy-manager'
+MANAGER_REPO = os.environ.get('WB_MANAGER_REPO') or 'utopiask/workbuddy-manager'
 
 # ── 下载代理（issue #106）──────────────────────────────────────
 # 容器里能连上 api.github.com（版本检测走它）却连不上 Release 资产所在的

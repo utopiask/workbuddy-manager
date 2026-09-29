@@ -187,5 +187,5 @@ python -m pytest  # 或按 tests/ 下的说明执行
 ```
 
 如发现新的安全问题，请通过
-[私密渠道](https://github.com/ithtelab/workbuddy-manager/security/advisories/new)
+[私密渠道](https://github.com/utopiask/workbuddy-manager/security/advisories/new)
 报告，**不要**公开提交 Issue。

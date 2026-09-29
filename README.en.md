@@ -21,9 +21,9 @@ updates come from a signed release package.
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e)
 
-[![Release](https://img.shields.io/github/v/release/ithtelab/workbuddy-manager?color=22c55e&label=Release)](https://github.com/ithtelab/workbuddy-manager/releases)
+[![Release](https://img.shields.io/github/v/release/utopiask/workbuddy-manager?color=22c55e&label=Release)](https://github.com/utopiask/workbuddy-manager/releases)
 [![Changelog](https://img.shields.io/badge/Changelog-CHANGELOG-blue)](CHANGELOG.md)
-[![Issues](https://img.shields.io/github/issues/ithtelab/workbuddy-manager?color=f59e0b&label=Issues)](https://github.com/ithtelab/workbuddy-manager/issues)
+[![Issues](https://img.shields.io/github/issues/utopiask/workbuddy-manager?color=f59e0b&label=Issues)](https://github.com/utopiask/workbuddy-manager/issues)
 [![LINUX DO](https://img.shields.io/badge/Community-LINUX%20DO-1f6feb)](https://linux.do)
 
 **English** · [简体中文](README.md)
@@ -71,7 +71,7 @@ it makes a capable upstream gateway visible and manageable. The two fit together
   code for it, so the upstream can stay lean
 
 Contributions are welcome: both panel and upstream-source issues and ideas belong in
-[this repository](https://github.com/ithtelab/workbuddy-manager/issues) — the original
+[this repository](https://github.com/utopiask/workbuddy-manager/issues) — the original
 upstream repo is gone, and its source is now maintained here.
 
 ---
@@ -464,7 +464,7 @@ Prerequisite: `workbuddy2api` is already running locally and has working start/s
 scripts plus a file log.
 
 ```powershell
-git clone https://github.com/ithtelab/workbuddy-manager.git
+git clone https://github.com/utopiask/workbuddy-manager.git
 cd workbuddy-manager
 Copy-Item .env.example .env
 ```
@@ -511,7 +511,7 @@ The repo ships a `Dockerfile` and `docker-compose.yml` for users already running
 upstream in Docker:
 
 ```bash
-git clone https://github.com/ithtelab/workbuddy-manager.git
+git clone https://github.com/utopiask/workbuddy-manager.git
 cd workbuddy-manager
 # Adjust WB2API_BASE and volume paths if needed (defaults assume upstream at ../workbuddy2api)
 docker compose up -d --build
@@ -531,7 +531,7 @@ docker compose logs workbuddy-manager | grep -A2 password   # first-boot random 
 Or pull the prebuilt image (pushed to GHCR on every release):
 
 ```bash
-docker pull ghcr.io/ithtelab/workbuddy-manager:latest
+docker pull ghcr.io/utopiask/workbuddy-manager:latest
 ```
 
 > The image ships for **both `linux/amd64` and `linux/arm64`** (Apple Silicon and ARM
@@ -605,7 +605,7 @@ A one-click script installs both on a clean machine:
 
 ```bash
 # Recommended: use the release package (includes the built frontend, no Node.js needed)
-wget https://github.com/ithtelab/workbuddy-manager/releases/latest/download/workbuddy-manager-<version>.tar.gz
+wget https://github.com/utopiask/workbuddy-manager/releases/latest/download/workbuddy-manager-<version>.tar.gz
 tar xzf workbuddy-manager-*.tar.gz && cd workbuddy-manager-*
 
 sudo bash deploy/install.sh
@@ -883,7 +883,7 @@ workbuddy-manager/
 2. **Always access over HTTPS**: bind 7863 / 7864 to `127.0.0.1` only and expose them
    through a reverse proxy
 3. If you put a CDN in front, set `WB_TRUSTED_PROXY_HOPS` to the number of proxy layers
-4. Report issues through the [private channel](https://github.com/ithtelab/workbuddy-manager/security/advisories/new),
+4. Report issues through the [private channel](https://github.com/utopiask/workbuddy-manager/security/advisories/new),
    **not** a public issue
 
 > ⚠️ Public exposure **requires** HTTPS, otherwise session cookies and passwords can be
@@ -907,15 +907,15 @@ workbuddy-manager/
 ## Changelog & feedback
 
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md) — additions, fixes and changes per version
-- **Releases**: [Releases](https://github.com/ithtelab/workbuddy-manager/releases) — each
+- **Releases**: [Releases](https://github.com/utopiask/workbuddy-manager/releases) — each
   version ships a deployable `.tar.gz` / `.zip` (with the built frontend); unpack and run
   `sudo bash deploy/install.sh`
-- **Feedback**: [report a bug](https://github.com/ithtelab/workbuddy-manager/issues/new?template=bug_report.yml) ·
-  [request a feature](https://github.com/ithtelab/workbuddy-manager/issues/new?template=feature_request.yml)
+- **Feedback**: [report a bug](https://github.com/utopiask/workbuddy-manager/issues/new?template=bug_report.yml) ·
+  [request a feature](https://github.com/utopiask/workbuddy-manager/issues/new?template=feature_request.yml)
 
 > Please include the version and error logs, and **remove any keys or tokens first**.
 > For issues with the upstream workbuddy2api itself, use
-> [this repository](https://github.com/ithtelab/workbuddy-manager/issues) — the upstream
+> [this repository](https://github.com/utopiask/workbuddy-manager/issues) — the upstream
 > source ships with our releases.
 
 ### Release process

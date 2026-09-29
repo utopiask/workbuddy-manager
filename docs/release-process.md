@@ -163,10 +163,10 @@ git push origin main
 git tag vX.Y.Z && git push origin vX.Y.Z
 
 # 4) 等 CI 完成后，在本机对**最终产物**签名并上传
-gh release download vX.Y.Z --repo ithtelab/workbuddy-manager --pattern '*.tar.gz'
+gh release download vX.Y.Z --repo utopiask/workbuddy-manager --pattern '*.tar.gz'
 ssh-keygen -Y sign -f ~/.ssh/workbuddy-release -n file workbuddy-manager-vX.Y.Z.tar.gz
 gh release upload vX.Y.Z workbuddy-manager-vX.Y.Z.tar.gz.sig \
-  --repo ithtelab/workbuddy-manager
+  --repo utopiask/workbuddy-manager
 
 # 5) 重新下载验证（不要用刚签名的那份，要重新拉）
 #    比对 sha256 → 用 deploy/update.py 的 check_signature 验签 → 解开核对版本号
@@ -192,10 +192,10 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 **维护者收尾（只有这三步）**
 
 ```bash
-gh release download vX.Y.Z --repo ithtelab/workbuddy-manager --pattern '*.tar.gz'
+gh release download vX.Y.Z --repo utopiask/workbuddy-manager --pattern '*.tar.gz'
 ssh-keygen -Y sign -f ~/.ssh/workbuddy-release -n file workbuddy-manager-vX.Y.Z.tar.gz
 gh release upload vX.Y.Z workbuddy-manager-vX.Y.Z.tar.gz.sig \
-  --repo ithtelab/workbuddy-manager
+  --repo utopiask/workbuddy-manager
 ```
 
 签名前核对密钥没拿错：`ssh-keygen -lf ~/.ssh/workbuddy-release.pub` 应输出
@@ -219,7 +219,7 @@ gh release upload vX.Y.Z workbuddy-manager-vX.Y.Z.tar.gz.sig \
 
 ```bash
 # 查看
-gh api repos/ithtelab/workbuddy-manager/rulesets \
+gh api repos/utopiask/workbuddy-manager/rulesets \
   --jq '.[] | "\(.id) \(.name) \(.target)"'
 ```
 
@@ -241,7 +241,7 @@ gh api repos/ithtelab/workbuddy-manager/rulesets \
 REST 接口只回显整数，GraphQL 会给出 `repositoryRoleName`：
 
 ```bash
-gh api graphql -f query='{ repository(owner:"ithtelab", name:"workbuddy-manager") {
+gh api graphql -f query='{ repository(owner:"utopiask", name:"workbuddy-manager") {
   rulesets(first:10){ nodes { name target bypassActors(first:20){
     nodes { repositoryRoleDatabaseId repositoryRoleName bypassMode } } } } } }'
 ```
