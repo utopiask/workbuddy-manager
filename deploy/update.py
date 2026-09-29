@@ -557,7 +557,7 @@ def _fetch_failed_hint(out: str, pinned: str = '') -> str:
         return (f'{target}的远端仓库取不到代码（发布包分发的那份不受影响）。\n'
                 '  本次沿用现有源码继续。要更新上游代码：管理端一键更新会带上包内那份；\n'
                 '  也可以把 WB_UPSTREAM_REPO 指向你自己的副本，或用 UPSTREAM_SRC 换一份源码\n'
-                '  （见 deploy/README.md 的「上游源码从哪来」）。')
+                '  （见 deploy/README.md 的「网关源码从哪来」）。')
     return (f'{target}拉取失败（提交/标签是否存在？网络是否正常？）'
             + (f'：{out.strip()[:200]}' if out.strip() else ''))
 

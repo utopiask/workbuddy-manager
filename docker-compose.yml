@@ -80,7 +80,7 @@ services:
         # 官方 registry 国内访问慢且会断。
         #   docker compose build --build-arg NPM_REGISTRY=https://registry.npmmirror.com
         NPM_REGISTRY: ""
-        # 可选：镜像里要装 docker CLI（供容器内「重载上游 / 读上游日志 / 一键更新」用），
+        # 可选：镜像里要装 docker CLI（供容器内「重载上游 / 读上游日志」用），
         # 它的静态包固定从 download.docker.com 取——国外 CDN，国内实测很慢，
         # 构建会长时间停在这一步。填国内镜像基址可绕开。
         # 可选值：https://mirrors.aliyun.com/docker-ce / https://mirrors.tuna.tsinghua.edu.cn/docker-ce
@@ -154,7 +154,7 @@ services:
       # （10001 是网关容器内进程的 uid，管理端也用同一 uid，见 Dockerfile）
       - ./workbuddy2api-data:/opt/workbuddy2api
       # docker 控制套接字：挂上后容器内的管理端可以像宿主部署那样操作上游容器
-      # （保存设置后自动重载 / 读上游日志 / 一键更新上游）。
+      # （保存设置后自动重载 / 读上游日志；网关源码更新见文件顶部说明）。
       #
       # **安全性说明（值得读）**：挂 docker.sock 等于把宿主 root 权限交给本容器。
       # 但这**不是新增的风险等级**——宿主部署时本服务本来就是 root 运行

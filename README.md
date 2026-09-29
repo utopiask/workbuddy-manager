@@ -4,13 +4,13 @@
 
 **腾讯 CodeBuddy 账号池管理控制台 · OpenAI 兼容反代网关**
 
-面向 [`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api) 的 Web 管理端：
-扫码批量纳管账号、定时签到与 token 保活、密钥分组分发、IP 与模型白名单、调用日志与
-用量统计；安装与更新走带签名校验的发布包。
+本仓库包含面向 [`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api) 的
+Web 管理端，以及网关本体 `gateway/`：扫码批量纳管账号、定时签到与 token 保活、
+密钥分组分发、IP 与模型白名单、调用日志与用量统计；安装与更新走发布包（可选验签）。
 
-> 上游 workbuddy2api 的源码**随本项目的发布包一起分发**（MIT）。
-> 已部署的不受影响；重装 / 迁移时怎么取得源码，见
-> [部署指南的开头一节](deploy/README.md#〇上游源码从哪来随发布包分发)。
+> 网关 `workbuddy2api`（Go，MIT）已作为 `gateway/` 收入本仓库，随本仓库一起构建、
+> 测试与发布（发布包内目录名为 `upstream/`）。已部署的不受影响；源码来源与重装 /
+> 迁移见 [部署指南的开头一节](deploy/README.md#〇网关源码从哪来随发布包分发)。
 
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
@@ -37,7 +37,7 @@
 
 ## 这是什么
 
-`workbuddy2api` 是一个把腾讯 CodeBuddy 账号池包装成 OpenAI 兼容接口的反代服务（Go 编写）。它的能力很完整，但只有命令行：加账号要跑脚本、看状态要 `curl /status`、发密钥没有界面。
+`workbuddy2api` 是一个把腾讯 CodeBuddy 账号池包装成 OpenAI 兼容接口的反代服务（Go 编写）。它的能力很完整，但只有命令行：加账号要跑脚本、看状态要 `curl /status`、发密钥没有界面。如今它已作为 `gateway/` 收入本仓库，与面板同仓维护。
 
 本项目补上这一块 —— 一个可以公网运营的 Web 控制台：
 
@@ -50,20 +50,24 @@
 | 无法知道谁用了多少 | 每次调用的模型、Token、延迟、来源 IP 全量留痕 |
 | 无任何 IP 防护 | 入站白/黑名单 + 每密钥 IP 上限与白名单 |
 
-**与 workbuddy2api 的关系**：本项目是为它做**可视化**的配套项目 —— 让能力强大的
-上游网关变得看得见、管得动。面板不侵入上游：**没有修改它一行代码**，账号轮询、
-并发与熔断仍由它负责。两者配合的方式很自然：
+**与网关 `gateway/` 的关系**：本仓库同时包含**网关**与**面板**两个组件 ——
+`gateway/`（Go，源自 [workbuddy2api](https://github.com/Sliverkiss/workbuddy2api)，MIT）
+负责账号池调度与 OpenAI 兼容接口；面板为它做可视化，让能力强大的网关变得看得见、
+管得动。网关源码已收入本仓库（原作者的原仓库已删除），随本仓库一起构建、测试、
+打包与发布（发布包内目录名为 `upstream/`）。面板不侵入网关的转发逻辑：账号轮询、
+并发与熔断仍由网关负责，但改网关代码时有两处耦合需要一并顾及（转发路径，以及面板
+绕过网关直连腾讯的登录 / 签到路径）。两者配合的方式很自然：
 
-- **上游负责能力，面板负责呈现**：账号调度、令牌刷新、限流熔断由 workbuddy2api
-  完成；面板把这些能力可视化，并补上密钥分发、IP 管控、用量统计这些运营环节
-- **互为参照、一起演进**：上游新增能力时本项目跟随适配，面板侧发现的运营需求也
-  会反哺上游。上游在它的 README 里把本项目列为「社区前端面板」之一，我们希望
-  一起把这个生态做得更好用
-- **上游专注自己的核心**：面板不要求上游为它改代码，让上游能保持精简
+- **网关负责能力，面板负责呈现**：账号调度、令牌刷新、限流熔断由网关完成；面板把
+  这些能力可视化，并补上密钥分发、IP 管控、用量统计这些运营环节
+- **同仓维护、一起演进**：网关与面板在同一仓库里改、同一个版本号发布，适配不再需要
+  跨仓库对表
+- **网关保持精简**：面板不要求网关内嵌 Web 管理界面，网关专注自己的核心
 
-欢迎参与共建：面板与上游源码的问题、想法都提到
-[本仓库](https://github.com/ithtelab/workbuddy-manager/issues)
-（上游源码随本项目的发布包分发）。
+欢迎参与共建：网关与面板的问题、想法都提到
+[本仓库](https://github.com/ithtelab/workbuddy-manager/issues)。来源、维护约定与
+许可见 [`gateway/UPSTREAM-SRC.txt`](gateway/UPSTREAM-SRC.txt) 与
+[`gateway/LICENSE`](gateway/LICENSE)（MIT，版权归原作者）。
 
 ---
 
@@ -194,14 +198,16 @@
 
 ### 一键更新
 - **网页上直接更新**，无需登录服务器：「设置 → 系统更新」
-- **自动检测新版本**：管理端（Release）与上游（最新提交）有更新时主动提醒，
-  并显示版本对比与上游最新提交说明
-- 三种模式：**全部更新** / **仅上游**（workbuddy2api）/ **仅管理端**
+- **自动检测新版本**：管理端有新版时主动提醒，并显示版本对比
+- 三种模式：**全部更新** / **仅上游**（workbuddy2api）/ **仅管理端**。网关源码随
+  管理端一起更新（发布包内 `upstream/`）；随包源码没有可拉的 git 远端，「仅上游」
+  不会单独拉代码
 - 实时进度与日志；账号授权、上游配置、密钥与日志数据全部保留
-- 上游更新后自动重新施加端口收敛，避免安全基线被上游默认配置覆盖
+- 网关源码有变化而重建时自动重新施加端口收敛，避免安全基线被默认配置覆盖
 - 仅管理员可用，更新目标为固定枚举（不接受客户端传入命令或路径）
-- **发布包强制验签（供应链防护）**：更新器内置维护者公钥，先验签后解压；
-  签名缺失/被篡改/不匹配都会拒绝安装。面板显示「已验签」标记。
+- **发布包验签（供应链防护，可强制）**：更新器内置维护者公钥，**签名存在时先验签
+  后解压**，缺失 / 被篡改 / 不匹配都会拒绝安装。默认放行未签名的包并在面板上提示，
+  设 `WB_REQUIRE_SIGNATURE=1` 可要求必须签名。面板显示验签状态。
   验签通过后 `deploy/` 也会随包更新（它里面的更新器本身也需要能升级）；
   若你要手工维护 `deploy/`，设 `WB_SYNC_DEPLOY=0` 即可保持不动。
   发版与密钥管理见 [docs/release-signing.md](docs/release-signing.md)
@@ -339,7 +345,7 @@ Token 后面的缓存标记（绿色「缓存 N%」/ 琥珀色「未命中」）
                    │ 复用 auths/*.json  调用 /status /v1/models
                    ▼
    ┌──────────────────────────────────────────────┐
-   │  workbuddy2api（Go，不改动）            :7863 │
+   │  网关 gateway/（Go，同仓）           :7863 │
    │  账号轮询 · 并发调度 · 熔断 · 令牌刷新          │
    └───────────────┬──────────────────────────────┘
                    ▼
@@ -508,8 +514,8 @@ docker pull ghcr.io/<你的用户名>/workbuddy-manager-multiarch:latest
 > 失败。也可以顺便推一份到 Docker Hub（加两个 Secret 即自动启用）。完整说明见
 > [deploy/fork-image/README.md](deploy/fork-image/README.md)。
 
-**容器版与宿主部署的差异很小** —— compose 默认挂载下面三样；唯一的区别是「更新上游
-源码」改由你在仓库里 `git pull && docker compose up -d --build`：
+**容器版与宿主部署的差异集中在下面几处** —— compose 默认挂载三样，另有更新方式与
+两点差异（界面都会提示）：
 
 | 挂载 | 作用 |
 |---|---|
@@ -520,20 +526,20 @@ docker pull ghcr.io/<你的用户名>/workbuddy-manager-multiarch:latest
 > **关于 docker.sock 的取舍**：挂它等于把宿主 root 权限交给本容器。但这**不是新增的风险等级**——宿主部署时本服务本来就是 root 运行（systemd 单元无 `User=`、安装脚本要求 root），而 root 进程本来就能 `docker run -v /:/host` 拿到宿主文件系统，两者权限等价。
 > 若你的要求是最小权限，把那一行注释掉即可：依赖 docker 的功能会**自动降级为「请到宿主机操作」**，界面如实提示，不会静默失败。
 
-还有两处与宿主部署的差异（界面都会提示）：
-
+- **更新网关源码**：在仓库里 `git pull && docker compose up -d --build`。用发布包时，
+  管理端更新会一并同步包内的 `upstream/`，源码有变化才重建容器。
 - **更新管理端会重启整个容器**：容器无法自我重启。流程是「替换代码 → 结束容器 → 由 compose 的 `restart` 策略用新代码拉起」，所以 compose 里必须保留 `restart: unless-stopped`。
 - **端口默认只绑定 `127.0.0.1`**：管理端持有全部账号凭据，应当藏在反向代理之后。确需直接访问请自行改 compose，并确保 HTTPS。
 
-> 与宿主机安装一样，一键更新**强制验签**发布包。镜像本身不参与这套签名
+> 与宿主机安装一样，一键更新会**校验发布包签名**（`WB_REQUIRE_SIGNATURE=1` 可要求
+> 必须签名）。镜像本身不参与这套签名
 > （那是另一条信任链，依赖 GHCR 的 digest 与 GitHub 账号安全）。
 
 ### 四、部署到服务器（一键脚本）
 
-本项目依赖上游 workbuddy2api（账号池与 OpenAI 兼容接口），**单独 clone 本仓库无法运行**。
-**发布包里已自带上游源码**（源码由本项目随包分发），
-一键脚本会装好两者；要改用自己那份源码见
-[部署指南](deploy/README.md#〇上游源码从哪来随发布包分发)：
+本项目由面板与网关 `gateway/` 两个组件构成，网关源码已随仓库提供（发布包内目录名为
+`upstream/`），一键脚本会装好两者；要改用自己那份源码见
+[部署指南](deploy/README.md#〇网关源码从哪来随发布包分发)：
 
 ```bash
 # 推荐：用 Release 包（内含已构建的前端，无需 Node.js）
@@ -546,12 +552,13 @@ sudo bash deploy/install.sh
 脚本自动完成：
 
 1. 环境预检（Python / Docker / 端口）
-2. **安装上游 workbuddy2api** —— 克隆、生成随机 `api_key`、修正目录属主、
-   构建并启动容器、等待就绪
+2. **部署网关 workbuddy2api** —— 取源码（包内 `upstream/`、仓库 `gateway/`，或
+   `UPSTREAM_SRC` 指定的一份）、生成随机 `api_key`、修正目录属主、构建并启动容器、
+   等待就绪
 3. 安装管理端 —— 部署代码、装依赖、注册 systemd 服务
 4. 验证并打印访问地址与初始密码
 
-**全程无需手工编辑配置。** 若已自备上游，加 `--skip-upstream` 即可跳过，
+**全程无需手工编辑配置。** 若已自备网关，加 `--skip-upstream` 即可跳过，
 脚本不会改动已有配置与账号。
 
 > 通过 `git clone` 部署时**不需要**手动构建前端：安装脚本会发现缺少
@@ -829,7 +836,7 @@ workbuddy-manager/
 
 ## 已知限制
 
-- **出站 IP 池未包含**：当前仅做**入站** IP 管控。若要为每个腾讯账号绑定独立**出口 IP / 代理**（上游请求由 workbuddy2api 发出），需要在其 Go 服务侧增加代理池支持，不在本仓库范围内。
+- **出站 IP 池未包含**：当前仅做**入站** IP 管控。若要为每个腾讯账号绑定独立**出口 IP / 代理**（上游请求由网关 `gateway/` 发出），需要在其 Go 服务侧增加代理池支持，目前尚未实现。
 - 请求的**请求体 / 响应体内容不做留存**，仅记录元数据（模型、状态、Token、延迟、来源），以保护隐私。
 - 用量统计按「天 × 密钥 × 模型」聚合；如需小时粒度可扩展 `usage_daily` 表。
 
@@ -844,8 +851,8 @@ workbuddy-manager/
   [功能建议](https://github.com/ithtelab/workbuddy-manager/issues/new?template=feature_request.yml)
 
 > 反馈时请附上版本号与错误日志，并**先移除其中的密钥、Token 等敏感信息**。
-> 上游 workbuddy2api 自身的问题也提到[本仓库](https://github.com/ithtelab/workbuddy-manager/issues)
-> ——上游源码随本项目的发布包分发。
+> 网关 `gateway/`（workbuddy2api）自身的问题也提到[本仓库](https://github.com/ithtelab/workbuddy-manager/issues)
+> ——网关源码已收入本仓库并随发布包分发。
 
 ### 版本发布流程
 
@@ -894,7 +901,8 @@ CI 会构建前端、打包产物、从 CHANGELOG 提取对应版本段落作为
 
 - [**LINUX DO**](https://linux.do) —— 本项目的发布与交流社区
 - [**linux-do/cdk**](https://github.com/linux-do/cdk)（MIT）—— 界面设计令牌与浮动底栏组件来源，本项目 UI 视觉与其保持一致
-- [**Sliverkiss/workbuddy2api**](https://github.com/Sliverkiss/workbuddy2api) —— 底层账号池与 OpenAI 兼容代理（MIT；源码随本项目的发布包分发，版权归原作者）
+- [**Sliverkiss/workbuddy2api**](https://github.com/Sliverkiss/workbuddy2api) —— 本仓库的
+  网关组件 `gateway/`（MIT，版权归原作者；原作者原仓库已删除，源码现随本仓库维护与分发）
 - [**lbjlaq/Antigravity-Manager**](https://github.com/lbjlaq/Antigravity-Manager) —— 管理端功能形态参考
 
 ## License

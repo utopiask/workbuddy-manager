@@ -1,27 +1,28 @@
 # 部署指南
 
-本项目管理端**依赖上游 workbuddy2api**（提供账号池调度与 OpenAI 兼容接口）。
-单独 clone 本仓库是跑不起来的 —— 为此我们提供了一键脚本，会在干净机器上安装好两者。
+本仓库同时包含**面板**（本管理端）与**网关**（`gateway/`，workbuddy2api，Go）。
+一键脚本会在干净机器上装好两者；网关源码随仓库 / 发布包一起提供，不用去任何
+外部地址取。
 
-> **重要**：请勿把本项目管理端的数据目录与上游账号目录提交或公开分享，
+> **重要**：请勿把本项目管理端的数据目录与网关账号目录提交或公开分享，
 > 其中含账号授权凭据。
 
 ---
 
-## 〇、上游源码从哪来（随发布包分发）
+## 〇、网关源码从哪来（随发布包分发）
 
-上游 workbuddy2api 的源码**随本项目的发布包一起分发**（包内 `upstream/`），
-装的时候不用去任何外部地址取。影响如下：
+网关 workbuddy2api 的源码**随本项目的发布包一起分发**（包内 `upstream/`），
+仓库内开发目录为 `gateway/`，装的时候不用去任何外部地址取。影响如下：
 
 | 场景 | 现在的状态 |
 |---|---|
-| **已经在跑**的部署 | **不受影响**。上游源码在你机器上、镜像也是本地构建的；面板的一键更新会沿用现有源码重建上游，面板自己照常更新 |
+| **已经在跑**的部署 | **不受影响**。网关源码在你机器上、镜像也是本地构建的；面板更新会一并同步包内的网关源码，面板自己照常更新 |
 | **新装** | 直接用包内那份（下面的脚本会自动识别） |
-| **更新上游代码** | 跟着管理端一起更新（一键更新会把包内那份同步进来）；要改代码就改本地那份，或用 `UPSTREAM_SRC` 换一份 |
+| **更新网关代码** | 跟着管理端一起更新（一键更新会把包内那份同步进来，有变化才重建）；要改代码就改仓库 `gateway/`，或用 `UPSTREAM_SRC` 换一份 |
 
 ### 包内自带，开箱即用
 
-最新版本的 Release 包内含 `upstream/`（上游源码），装的时候直接用，
+最新版本的 Release 包内含 `upstream/`（网关源码），装的时候直接用，
 **不需要联网取任何外部源码**：
 
 ```bash
@@ -37,22 +38,23 @@ sudo bash deploy/install.sh          # 自动使用包内的 upstream/
 sudo UPSTREAM_SRC=/opt/workbuddy2api bash deploy/install.sh
 sudo UPSTREAM_SRC=/path/to/workbuddy2api-<版本>.tar.gz bash deploy/install.sh
 
-# 2) 从你自己的 git 副本拉
+# 2) 从你自己的 git 副本拉（脚本仍支持；官方上游仓库不提供此来源）
 sudo UPSTREAM_REPO=https://github.com/<你的账号>/workbuddy2api.git bash deploy/install.sh
 
-# 3) 上游已手工装好，只想装面板
+# 3) 网关已手工装好，只想装面板
 sudo bash deploy/install.sh --skip-upstream
 ```
 
-优先级：`UPSTREAM_SRC` → 发布包自带的 `upstream/` → 目标目录里已有的 git 仓库
+优先级：`UPSTREAM_SRC` → 发布包自带的 `upstream/` → 目标目录里已有的源码
 → `UPSTREAM_REPO` 克隆。`UPSTREAM_DIR` 默认 `/opt/workbuddy2api`。
 
-### 以后怎么更新上游代码
+### 以后怎么更新网关代码
 
-用面板里的**一键更新**即可 —— 它会把包内那份上游源码同步进 `/opt/workbuddy2api`
+用面板里的**一键更新**即可 —— 它会把包内那份网关源码同步进 `/opt/workbuddy2api`
 （只增改，不动 `config.json` / `auths/` / `data/`），**有变化才重建容器**。
-随包分发的上游没有 `git pull` 可拉；要改代码请改本地那份（或用 `UPSTREAM_SRC`
-覆盖一份新的），再：
+要改代码就改仓库 `gateway/`，再按部署形态重建网关：仓库 / compose 部署用
+`git pull && docker compose up -d --build`；install.sh 部署则在网关目录
+（默认 `/opt/workbuddy2api`）执行：
 
 ```bash
 cd /opt/workbuddy2api && docker compose up -d --build
@@ -62,7 +64,7 @@ cd /opt/workbuddy2api && docker compose up -d --build
 
 ### 许可
 
-上游为 MIT 许可（版权归原作者）。继续使用、修改、再分发都需保留它的 `LICENSE`
+网关为 MIT 许可（版权归原作者）。继续使用、修改、再分发都需保留它的 `LICENSE`
 与版权声明 —— 源码目录里那份 `LICENSE` 不要删。
 
 ---
@@ -75,15 +77,16 @@ wget https://github.com/ithtelab/workbuddy-manager/releases/latest/download/work
 tar xzf workbuddy-manager-*.tar.gz
 cd workbuddy-manager-*
 
-# 2) 一键部署（自动检测上游；上游源码用 UPSTREAM_SRC 指定，见上一节）
+# 2) 一键部署（自动识别包内 upstream/ 网关源码；要换一份用 UPSTREAM_SRC，见上一节）
 sudo bash deploy/install.sh
 ```
 
 脚本会自动完成：
 
 1. 环境预检（Python ≥3.9、Docker、端口占用检查）
-2. **安装上游 workbuddy2api** —— 取源码（本地目录或 git 地址）、生成随机 `api_key`、
-   设置目录属主、构建并启动容器、等待就绪
+2. **部署网关 workbuddy2api** —— 取源码（包内 `upstream/`，或 `UPSTREAM_SRC` 指定的
+   本地目录 / 压缩包 / `UPSTREAM_REPO` 的 git 地址）、生成随机 `api_key`、设置目录
+   属主、构建并启动容器、等待就绪
 3. 安装管理端 —— 部署代码、装依赖、注册 systemd 服务
 4. 验证两条链路并打印访问地址与初始密码
 
@@ -128,7 +131,7 @@ sudo APP_DIR=/opt/wbm \
 |---|---|---|
 | `APP_DIR` | `/opt/workbuddy-manager` | 管理端目录 |
 | `UPSTREAM_DIR` | `/opt/workbuddy2api` | 上游目录 |
-| `UPSTREAM_REPO` | 上游 GitHub 地址 | 上游仓库地址 |
+| `UPSTREAM_REPO` | 原作者仓库地址（已不可访问） | 自定义上游 git 地址（一般改用 `UPSTREAM_SRC`） |
 | `MANAGER_PORT` | `7864` | 管理端端口 |
 | `UPSTREAM_PORT` | `7863` | 上游端口 |
 | `PY` | `/usr/bin/python3` | Python 解释器路径 |
@@ -291,15 +294,15 @@ location /workbuddy-manager/ {
 
 | 模式 | 作用 | 适用场景 |
 |---|---|---|
-| **全部更新** | 上游 + 管理端 | 常规升级 |
-| **仅上游** | 只更新 workbuddy2api | 上游有修复 / 新模型 |
+| **全部更新** | 管理端 + 同步包内网关源码 | 常规升级 |
+| **仅上游** | 只在网关是 git 仓库时拉取；随包源码下不单独更新 | 一般无需使用（网关源码随管理端一起更新） |
 | **仅管理端** | 只更新本控制台 | 界面或管理功能升级 |
 
 更新在后台执行，页面实时显示进度与日志；期间服务可能短暂重启
-（页面会自动重连）。**账号授权、上游配置、密钥与日志数据都会保留。**
+（页面会自动重连）。**账号授权、网关配置、密钥与日志数据都会保留。**
 
-> 上游更新会自动把端口绑定重新收敛为 `127.0.0.1`，避免上游仓库里的
-> `7863:7863` 覆盖本项目的安全基线。
+> 网关源码有变化而触发重建时，会自动把端口绑定重新收敛为 `127.0.0.1`，
+> 避免包内 compose 的 `7863:7863` 覆盖本项目的安全基线。
 
 ### 方式二：命令行
 
@@ -346,7 +349,9 @@ curl -s http://127.0.0.1:7864/healthz             # 含上游连通性
 
 # 升级
 cd /opt/workbuddy-manager && git pull              # 管理端代码
-cd /opt/workbuddy2api && git pull && docker compose up -d --build  # 上游
+# 网关源码随发布包由一键更新同步；要重建容器就用下面这条：
+cd /opt/workbuddy2api && docker compose up -d --build
+# （若网关目录是你自己的 git 副本，可先 git pull 再重建）
 ```
 
 ---
