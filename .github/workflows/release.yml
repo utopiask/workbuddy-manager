@@ -37,12 +37,36 @@ permissions:
   packages: write
 
 jobs:
+  # ── 解析发布 ref：所有 job 必须构建/打包同一个 ref ───────────────
+  # 手动补发已有 tag 时，若闸门 job 各自 checkout 默认分支，会拿分支 HEAD 的
+  # 前端与 Python 代码去装配 tag 的 server/，产生版本错配。这里统一解析一次，
+  # 后续 job 一律按 outputs.tag checkout。
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      version: ${{ steps.vars.outputs.version }}
+    steps:
+      - name: 解析版本号
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+
   # ── 闸门 1：Go 网关（Task 1 引入的 gateway/ 模块）────────────────
   # 版本以 gateway/go.mod 为准（1.22.5），避免 CI 与本地 go.mod 漂移。
   gateway:
+    needs: [resolve]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
 
       - name: 安装 Go
         uses: actions/setup-go@v5
@@ -60,9 +84,12 @@ jobs:
 
   # ── 闸门 2：后端 Python 测试 ─────────────────────────────────────
   python:
+    needs: [resolve]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
 
       - name: 安装 Python
         uses: actions/setup-python@v5
@@ -82,9 +109,12 @@ jobs:
   # ── 闸门 3：前端构建 ────────────────────────────────────────────
   # 只构建并上传 web/out 作为 artifact；打包与发布在 release job 完成。
   web:
+    needs: [resolve]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
 
       - name: 安装 Node
         uses: actions/setup-node@v4
@@ -116,23 +146,12 @@ jobs:
 
   # ── 发布：三个闸门都通过后才执行 ─────────────────────────────────
   release:
-    needs: [gateway, python, web]
+    needs: [resolve, gateway, python, web]
     runs-on: ubuntu-latest
     steps:
-      - name: 解析版本号
-        id: vars
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
-
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.vars.outputs.tag }}
+          ref: ${{ needs.resolve.outputs.tag }}
           fetch-depth: 0
 
       - name: 下载前端构建产物
@@ -144,7 +163,7 @@ jobs:
       - name: 组装发布目录
         id: pack
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           STAGE="workbuddy-manager-${TAG}"
           rm -rf "$STAGE" && mkdir -p "$STAGE"
           cp -r server "$STAGE/"
@@ -191,7 +210,7 @@ jobs:
 
       - name: 生成发布说明
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           # 优先取 CHANGELOG 中该版本的段落；取不到则退回提交摘要
           python3 - "$TAG" > RELEASE_NOTES.md <<'PY'
           import re, sys, subprocess
@@ -227,7 +246,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           STAGE="${{ steps.pack.outputs.stage }}"
           if gh release view "$TAG" >/dev/null 2>&1 && \
              gh release view "$TAG" --json assets -q '.assets[].name' | grep -qx "${STAGE}.tar.gz.sig"; then
@@ -242,7 +261,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           STAGE="${{ steps.pack.outputs.stage }}"
           if [ "${{ steps.sigcheck.outputs.has_sig }}" = "1" ]; then
             # 一旦有签名就绝不再覆盖 tar.gz：重新打包会产生不同的字节流，
@@ -268,7 +287,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           STAGE="${{ steps.pack.outputs.stage }}"
           gh release download "$TAG" --pattern "${STAGE}.tar.gz" --pattern "${STAGE}.tar.gz.sig" --dir . --clobber
           if [ ! -f deploy/release-signing-key.pub ]; then
@@ -346,7 +365,7 @@ jobs:
           push: true
           # 镜像标签用小写（GHCR 要求），去掉 v 前缀
           tags: |
-            ${{ steps.image.outputs.name }}:${{ steps.vars.outputs.version }}
+            ${{ steps.image.outputs.name }}:${{ needs.resolve.outputs.version }}
             ${{ steps.image.outputs.name }}:latest
           # 关掉 provenance 证明：它会在 manifest list 里塞入 attestation 条目，
           # 某些旧版 Docker（< 25）拉取时会报 unknown/unknown platform。
@@ -376,11 +395,11 @@ jobs:
 
           ```bash
           # 在本机（私钥所在机器）：
-          gh release download ${{ steps.vars.outputs.tag }} \
+          gh release download ${{ needs.resolve.outputs.tag }} \
             --pattern '${{ steps.pack.outputs.stage }}.tar.gz'
           ssh-keygen -Y sign -f ~/.ssh/workbuddy-release -n file \
             '${{ steps.pack.outputs.stage }}.tar.gz'
-          gh release upload ${{ steps.vars.outputs.tag }} \
+          gh release upload ${{ needs.resolve.outputs.tag }} \
             '${{ steps.pack.outputs.stage }}.tar.gz.sig'
           ```
 
@@ -398,6 +417,6 @@ jobs:
 
           或者用容器部署（另见仓库内 docker-compose.yml）：
           ```bash
-          docker pull ghcr.io/${{ github.repository_owner }}/workbuddy-manager:${{ steps.vars.outputs.version }}
+          docker pull ghcr.io/${{ github.repository_owner }}/workbuddy-manager:${{ needs.resolve.outputs.version }}
           ```
           EOF

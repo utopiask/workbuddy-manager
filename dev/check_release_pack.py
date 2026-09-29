@@ -35,7 +35,8 @@ def main() -> int:
     step = next(s for s in job['steps'] if s.get('id') == 'pack')
     script = step['run']
     # 去掉 GitHub 表达式与本机没有的 zip，其余**原样执行**
-    script = script.replace('${{ steps.vars.outputs.tag }}', 'v9.9.9-test')
+    for token in ('${{ steps.vars.outputs.tag }}', '${{ needs.resolve.outputs.tag }}'):
+        script = script.replace(token, 'v9.9.9-test')
     script = script.replace('${{ github.repository }}', 'ithtelab/workbuddy-manager')
     script = '\n'.join(l for l in script.splitlines() if 'zip -qr' not in l)
 

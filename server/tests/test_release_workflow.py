@@ -22,3 +22,19 @@ class ReleaseWorkflowTest(unittest.TestCase):
         steps = self.data['jobs']['gateway']['steps']
         runs = '\n'.join(s.get('run','') for s in steps)
         self.assertIn('go test', runs)
+
+    def test_all_jobs_build_from_resolved_ref(self):
+        # 手动补发已有 tag 时，闸门 job 必须与 release 打包同一个 ref，
+        # 否则前端/Python 取自分支 HEAD、server/ 取自 tag，产生版本错配。
+        resolve = self.data['jobs'].get('resolve')
+        self.assertIsNotNone(resolve, '缺少 resolve job')
+        self.assertIn('tag', resolve.get('outputs') or {}, 'resolve 未输出 tag')
+        expected = '${{ needs.resolve.outputs.tag }}'
+        for name in ('gateway', 'python', 'web', 'release'):
+            job = self.data['jobs'][name]
+            self.assertIn('resolve', job.get('needs') or [], f'{name} 未依赖 resolve')
+            checkouts = [s for s in job['steps']
+                         if str(s.get('uses', '')).startswith('actions/checkout')]
+            self.assertTrue(checkouts, f'{name} 缺少 checkout 步骤')
+            ref = (checkouts[0].get('with') or {}).get('ref')
+            self.assertEqual(ref, expected, f'{name} 的 checkout ref 未按解析出的 tag')
