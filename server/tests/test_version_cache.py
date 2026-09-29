@@ -131,7 +131,7 @@ class DeployDiffMessageTest(unittest.TestCase):
 
     def test_added_only_says_no_action_needed(self) -> None:
         """只新增文件时必须说「可以不处理」——用户最需要的就是这句话。"""
-        out = self._run([], ['check-upstream.sh'])
+        out = self._run([], ['new-tool.sh'])
         self.assertIn('仅新增', out)
         self.assertIn('可以不处理', out)
         self.assertNotIn('验签相关文件', out, '仅新增不应触发验签警告')
@@ -150,7 +150,7 @@ class DeployDiffMessageTest(unittest.TestCase):
 
     def test_anchor_warning_wins_over_plain(self) -> None:
         """同时有普通与信任锚改动时，必须报最严重的那一档。"""
-        out = self._run(['install.sh', 'update.py'], ['check-upstream.sh'])
+        out = self._run(['install.sh', 'update.py'], ['new-tool.sh'])
         self.assertIn('验签相关文件', out)
         self.assertIn('update.py', out)
 

@@ -1038,6 +1038,7 @@
     "signedTitleDetail": "リリースアーカイブの署名検証に成功しました（{detail}）",
     "unsigned": "未検証",
     "unsignedTitle": "今回の更新は署名検証をスキップしています（WB_SKIP_SIGNATURE=1）。アーカイブは検証されていません",
+    "unsignedAllowedTitle": "このリリースは未署名（.tar.gz.sig なし）で、既定のポリシーにより許可されました。必須にするには WB_REQUIRE_SIGNATURE=1 を設定してください",
     "newVersion": "新しいバージョンがあります",
     "newVersionAvailable": "新しいバージョンが利用可能です",
     "upToDate": "最新バージョンです",

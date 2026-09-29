@@ -18,8 +18,9 @@ ssh-keygen；而下载走 `file://` URL（urlopen 原生支持），因此连网
 锁定以下不变量：
   1. 有效签名 → 放行
   2. 包被篡改 → 拒绝（这是攻击者的主要目标）
-  3. 签名被篡改 → 拒绝
-  4. 没有签名文件 → 拒绝（不能"没签就当通过"）
+  3. 签名被篡改 → 拒绝（无论默认还是 WB_REQUIRE_SIGNATURE=1）
+  4. 默认允许未签名 Release，但**必须留下 warn 级「未签名」提示**（可审计，不静默放行）；
+     WB_REQUIRE_SIGNATURE=1 时缺签名恢复为硬拒绝
   5. 公钥不匹配 → 拒绝
   6. 公钥未配置（占位值）→ 拒绝并给出指引（默认安全）
   7. WB_SKIP_SIGNATURE=1 → 跳过但**必须告警**（紧急逃生门）
@@ -185,11 +186,35 @@ class SignatureVerifyTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn('签名校验失败', rep.text() + err)
 
-    def test_missing_signature_rejected(self) -> None:
-        """不能把「没签名」当成「通过」——否则攻击者只要不传 .sig 就绕过了。"""
+    def test_unsigned_allowed_by_default(self) -> None:
+        """默认策略：未签名不再阻断更新，但必须留下醒目的「未签名」告警。
+
+        spec Phase 1 决策 #7：签名从"强制"降为"可选"。缺失 .sig 不再是拒绝
+        更新/发版的硬门槛；但放行必须可见、可审计，不能静默通过。
+        """
         ok, rep, err = self._check(self.pkg, None)
-        self.assertFalse(ok)
+        self.assertTrue(ok, '默认应允许未签名 Release：' + rep.text() + err)
+        self.assertTrue(rep.warned(), '放行未签名 Release 必须留下 warn 级提示')
+        self.assertIn('未签名', rep.text())
+
+    def test_unsigned_rejected_when_required(self) -> None:
+        """WB_REQUIRE_SIGNATURE=1 恢复强校验：缺签名必须拒绝。"""
+        ok, rep, err = self._check(self.pkg, None, WB_REQUIRE_SIGNATURE='1')
+        self.assertFalse(ok, 'WB_REQUIRE_SIGNATURE=1 时缺签名竟被放行')
         self.assertIn('没有可用的签名文件', rep.text() + err)
+
+    def test_bad_signature_rejected_in_both_modes(self) -> None:
+        """回归护栏：无论默认还是强制模式，验不过的签名都必须拒绝。
+
+        「未签名可选」绝不能顺带放松「签了名但验不过」——那正是攻击者的主目标。
+        """
+        bad = bytearray(self.sig.read_bytes())
+        bad[len(bad) // 2] ^= 0xFF
+        for env in ({}, {'WB_REQUIRE_SIGNATURE': '1'}):
+            with self.subTest(mode='required' if env else 'default'):
+                ok, rep, err = self._check(self.pkg, bytes(bad), **env)
+                self.assertFalse(ok, f'签名被篡改却在 {env or "默认"} 模式放行')
+                self.assertIn('签名校验失败', rep.text() + err)
 
     def test_wrong_public_key_rejected(self) -> None:
         """换成别人的公钥：签名对不上，必须拒绝。"""
@@ -241,11 +266,23 @@ class SignatureVerifyTest(unittest.TestCase):
         self.assertIn('签名校验通过', rep.text())
         self.assertIn('校验发布包签名', rep.text())
 
-    def test_release_without_sig_asset_rejected(self) -> None:
-        """Release 里没有 .sig 资产（sig_url 为空）→ 拒绝，且不能假装通过。"""
+    def test_release_without_sig_asset_allowed_by_default(self) -> None:
+        """Release 里没有 .sig 资产（sig_url 为空）：默认放行 + 告警，且不凭空造签名文件。"""
         mod = _load_update_mod(pubkey=self.pub)
         work = Path(tempfile.mkdtemp(dir=self.dir))
         pkg = work / 'nosig.tar.gz'
+        shutil.copyfile(self.pkg, pkg)
+        rep = _Rep()
+        mod.verify_release_signature(pkg, '', rep)
+        self.assertTrue(rep.warned(), '放行未签名 Release 必须告警')
+        self.assertIn('未签名', rep.text())
+        self.assertFalse(Path(str(pkg) + '.sig').exists(), '不应凭空造出签名文件')
+
+    def test_release_without_sig_asset_rejected_when_required(self) -> None:
+        """WB_REQUIRE_SIGNATURE=1 时，缺 .sig 资产仍必须拒绝。"""
+        mod = _load_update_mod(pubkey=self.pub, WB_REQUIRE_SIGNATURE='1')
+        work = Path(tempfile.mkdtemp(dir=self.dir))
+        pkg = work / 'nosig-req.tar.gz'
         shutil.copyfile(self.pkg, pkg)
         rep = _Rep()
         with self.assertRaises(RuntimeError) as ctx:

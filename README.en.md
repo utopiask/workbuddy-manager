@@ -4,14 +4,17 @@
 
 **Management console for Tencent CodeBuddy account pools · OpenAI-compatible gateway**
 
-A web console for [`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api):
-bulk QR onboarding, scheduled check-in and token keep-alive, per-group API key
-distribution, IP and model allowlists, request logs and usage analytics; installs and
-updates come from a signed release package.
+This repository contains the web console for
+[`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api) plus the gateway
+itself in `gateway/`: bulk QR onboarding, scheduled check-in and token keep-alive,
+per-group API key distribution, IP and model allowlists, request logs and usage
+analytics; installs and updates come from a release package (signature optional).
 
-> The upstream workbuddy2api source **ships inside this project's release package**
-> (MIT). Existing deployments are unaffected — for reinstall/migration, see the
-> [deployment guide](deploy/README.md#〇上游源码从哪来随发布包分发).
+> The gateway `workbuddy2api` (Go, MIT) now lives in this repository as `gateway/`,
+> built, tested and released together with it (it ships as `upstream/` inside the
+> release package). Existing deployments are unaffected — for source origin and
+> reinstall/migration, see the
+> [deployment guide](deploy/README.md#〇网关源码从哪来随发布包分发).
 
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
@@ -41,7 +44,8 @@ Published and discussed in the [**LINUX DO**](https://linux.do) community — �
 `workbuddy2api` (its original repository has been deleted by its author) wraps a Tencent CodeBuddy
 account pool into an OpenAI-compatible API (written in Go). Its capabilities are complete,
 but they are command-line only: adding an account means running a script, checking status
-means `curl /status`, and handing out API keys has no interface at all.
+means `curl /status`, and handing out API keys has no interface at all. It now lives in
+this repository as `gateway/`, maintained alongside the console.
 
 This project fills that gap — a web console you can safely run on the public internet:
 
@@ -54,25 +58,34 @@ This project fills that gap — a web console you can safely run on the public i
 | No idea who consumed how much | Every call is logged: model, tokens, latency, source IP |
 | No IP protection at all | Inbound allow/deny lists plus per-key IP limits and allowlists |
 
-> **Not a single line of workbuddy2api is modified.** Account rotation, concurrency and
-> circuit breaking stay its job; this project is a separate console and gateway.
+> **The console does not touch the gateway's forwarding logic.** Account rotation,
+> concurrency and circuit breaking stay the gateway's job; the console is a separate
+> component in the same repository.
 
-**How this relates to workbuddy2api**: this project is the **visual companion** to it —
-it makes a capable upstream gateway visible and manageable. The two fit together naturally:
+**How this relates to `gateway/`**: the repository now holds **both components** —
+`gateway/` (Go, derived from
+[workbuddy2api](https://github.com/Sliverkiss/workbuddy2api), MIT) provides the account
+pool and OpenAI-compatible API, while the console visualises it and makes a capable
+gateway visible and manageable. The gateway source is now part of this repository (the
+author's original repository is gone) and is built, tested, packaged and released with
+it (it ships as `upstream/` inside the release package). The console does not touch the
+gateway's forwarding logic, but **two couplings** need care when changing gateway code:
+the forwarding path, and the path where the console talks to Tencent directly for
+login / check-in. The two fit together naturally:
 
-- **The upstream provides the capabilities, the panel presents them**: account scheduling,
-  token refresh and circuit breaking are workbuddy2api's job; the panel visualises those
+- **The gateway provides the capabilities, the panel presents them**: account scheduling,
+  token refresh and circuit breaking are the gateway's job; the panel visualises those
   capabilities and adds the operational side — key distribution, IP control, usage stats
-- **We learn from each other and evolve together**: when the upstream gains a capability
-  this project follows, and operational needs discovered on the panel side feed back to the
-  upstream. The upstream lists this project among its "community front-end panels", and we
-  hope to make that ecosystem better together
-- **The upstream stays focused on its core**: the panel does not ask the upstream to change
-  code for it, so the upstream can stay lean
+- **One repo, one release**: gateway and console are changed together and share a single
+  version and tag, so adapting no longer needs cross-repo coordination
+- **The gateway stays lean**: the panel does not ask the gateway to embed a web console,
+  so it can stay focused on its core
 
-Contributions are welcome: both panel and upstream-source issues and ideas belong in
-[this repository](https://github.com/utopiask/workbuddy-manager/issues) — the original
-upstream repo is gone, and its source is now maintained here.
+Contributions are welcome: gateway and console issues and ideas both belong in
+[this repository](https://github.com/utopiask/workbuddy-manager/issues). For origin,
+maintenance rules and licensing, see
+[`gateway/UPSTREAM-SRC.txt`](gateway/UPSTREAM-SRC.txt) and
+[`gateway/LICENSE`](gateway/LICENSE) (MIT, copyright the original author).
 
 ---
 
@@ -227,18 +240,22 @@ upstream repo is gone, and its source is now maintained here.
 
 ### One-click update
 - **Update from the web UI**, no server login needed: Settings → System update
-- **New version detection**: notifies when either the console (GitHub Release) or the
-  upstream (latest commit) has updates, with a version comparison and commit summaries
+- **New version detection**: notifies when the console has a newer release, with a
+  version comparison
 - Three modes: **update everything** / **upstream only** (`workbuddy2api`) /
-  **console only**
+  **console only**. The gateway source updates together with the console (it ships as
+  `upstream/` in the package); bundled source has no git remote, so "upstream only" does
+  not fetch code on its own
 - Live progress and logs; account auth files, upstream config, keys and log data are all
   preserved
-- Port confinement is re-applied after an upstream update so the security baseline cannot
-  be silently reverted by upstream defaults
+- Port confinement is re-applied when the gateway source changes and triggers a rebuild,
+  so the security baseline cannot be silently reverted by upstream defaults
 - Admins only; the target is a fixed enum (no client-supplied commands or paths)
-- **Release packages are always signature-verified** (supply-chain protection): the
-  updater embeds the maintainer's public key and verifies before extracting. A missing,
-  tampered or mismatched signature aborts the install. The panel shows a "verified" badge,
+- **Release packages are signature-verified (supply-chain protection, enforceable)**:
+  the updater embeds the maintainer's public key and, **when a signature is present,
+  verifies it before extracting**; a tampered or mismatched signature aborts the install.
+  Unsigned packages are allowed by default with a warning; set `WB_REQUIRE_SIGNATURE=1`
+  to require a signature. The panel shows the verification state.
   Once verification passes, `deploy/` is updated from the package too (the updater
   itself lives there and needs to be upgradeable). Set `WB_SYNC_DEPLOY=0` to keep
   your local `deploy/` untouched.
@@ -392,7 +409,7 @@ running total for the session, and each reply lists its charge and token count.
                    │ shares auths/*.json; calls /status /v1/models
                    ▼
    ┌──────────────────────────────────────────────┐
-   │  workbuddy2api (Go, unmodified)        :7863 │
+   │  Gateway gateway/ (Go, in-repo)         :7863 │
    │  account rotation · scheduling · breaker · refresh │
    └───────────────┬──────────────────────────────┘
                    ▼
@@ -507,16 +524,25 @@ update the code manually and restart the service instead.
 
 ### 3. Docker
 
-The repo ships a `Dockerfile` and `docker-compose.yml` for users already running the
-upstream in Docker:
+The repo ships a `Dockerfile` and `docker-compose.yml`: one stack starts both the
+**console** and the **gateway** (the gateway is internal-only, reached by the console at
+`http://workbuddy2api:7863`):
 
 ```bash
 git clone https://github.com/utopiask/workbuddy-manager.git
 cd workbuddy-manager
-# Adjust WB2API_BASE and volume paths if needed (defaults assume upstream at ../workbuddy2api)
+
+# Prepare the gateway's data dir and config first (compose does not create them; a
+# config.json that is a directory makes the gateway fail to start)
+mkdir -p workbuddy2api-data/auths workbuddy2api-data/data
+cp gateway/config.example.json workbuddy2api-data/config.json   # fill in api_key etc.
+
 docker compose up -d --build
 docker compose logs workbuddy-manager | grep -A2 password   # first-boot random password
 ```
+
+> When deploying from a release tarball the gateway source lives in `upstream/`: use
+> `cp upstream/config.example.json workbuddy2api-data/config.json` instead.
 
 > **The frontend is built inside the image automatically.** `web/out` (the frontend
 > build output) is not committed, so a fresh `git clone` does not contain it. If the
@@ -566,14 +592,15 @@ docker pull ghcr.io/<your-username>/workbuddy-manager-multiarch:latest
 > Docker Hub at the same time (two secrets enable it automatically). Full details in
 > [deploy/fork-image/README.md](deploy/fork-image/README.md).
 
-**The container build has the same capabilities as a host install** — the compose file
-mounts three things to make that true:
+**The container build differs from a host install in a few places** — the compose file
+mounts the three things below, plus the update method and two further differences
+(all surfaced in the UI):
 
 | Mount | Purpose |
 |---|---|
-| Upstream repo directory | Read its compose file for port confinement; `git pull` to update it; read/write `config.json` and `auths/` (**adding an account writes to auths**, so it cannot be read-only) |
-| `./data` | Database, logs, update state. Must be persisted |
-| `/var/run/docker.sock` | Lets the console inside the container restart/rebuild the upstream container — i.e. "update upstream", "auto-reload after saving settings" and "read upstream logs" |
+| `workbuddy2api-data/` | The gateway's shared data dir (`config.json` + `auths/` + `data/`): the console writes, the gateway reads — the same files on both sides. **Adding an account writes to auths**, so it cannot be read-only |
+| `./data` | The console's own database, logs, update state. Must be persisted |
+| `/var/run/docker.sock` | Lets the console inside the container `docker restart workbuddy2api` — i.e. "auto-reload after saving settings" and "read upstream logs" |
 
 > **On mounting docker.sock**: it grants this container host-root privileges. But this is
 > **not a new risk level** — a host install already runs as root (the systemd unit has no
@@ -582,8 +609,9 @@ mounts three things to make that true:
 > If you need least privilege, comment that line out: docker-dependent features **degrade
 > gracefully** to "run this on the host" with a clear notice in the UI, never failing silently.
 
-Two other differences from a host install (both surfaced in the UI):
-
+- **Updating the gateway source**: in the repo, `git pull && docker compose up -d --build`.
+  With a release package the console update syncs the bundled `upstream/` too, and the
+  container is rebuilt only when the source changed.
 - **Updating the console restarts the whole container**: a container cannot restart itself.
   The flow is "replace code → exit container → compose's `restart` policy brings it back
   with the new code", so `restart: unless-stopped` must stay in the compose file.
@@ -591,17 +619,18 @@ Two other differences from a host install (both surfaced in the UI):
   and belongs behind a reverse proxy. Change the compose file if you must expose it
   directly, and make sure HTTPS is in place.
 
-> As with a host install, one-click updates **always verify the release signature**. The
+> As with a host install, one-click updates **verify the release signature**
+> (`WB_REQUIRE_SIGNATURE=1` requires one). The
 > image itself is outside that signature (a separate trust chain based on the GHCR digest
 > and GitHub account security).
 
 ### 4. Server deployment (one-click script)
 
-This project depends on the upstream workbuddy2api (account pool and OpenAI-compatible
-API) — **cloning this repo alone will not run**. The release package **ships the upstream source**, so the script installs both.
-To use your own copy instead, see the
-[deployment guide](deploy/README.md#〇上游源码从哪来随发布包分发).
-A one-click script installs both on a clean machine:
+This project consists of two components — the console and the gateway `gateway/` — and
+the gateway source is already in this repository (it ships as `upstream/` inside the
+release package). A one-click script installs both on a clean machine. To use your own
+copy instead, see the
+[deployment guide](deploy/README.md#〇网关源码从哪来随发布包分发).
 
 ```bash
 # Recommended: use the release package (includes the built frontend, no Node.js needed)
@@ -614,12 +643,13 @@ sudo bash deploy/install.sh
 The script will:
 
 1. Pre-flight checks (Python / Docker / ports)
-2. **Install the upstream workbuddy2api** — clone, generate a random `api_key`, fix
+2. **Install the gateway workbuddy2api** — take the source (package `upstream/`, repo
+   `gateway/`, or a copy passed via `UPSTREAM_SRC`), generate a random `api_key`, fix
    directory ownership, build and start the container, wait for readiness
 3. Install the console — deploy code, install dependencies, register the systemd service
 4. Verify and print the access URL and initial password
 
-**No manual config editing required.** If you already have the upstream, pass
+**No manual config editing required.** If you already have the gateway, pass
 `--skip-upstream` and it will not touch your existing config or accounts.
 
 > When deploying via `git clone` you do **not** need to build the frontend by hand:
@@ -914,9 +944,9 @@ workbuddy-manager/
   [request a feature](https://github.com/utopiask/workbuddy-manager/issues/new?template=feature_request.yml)
 
 > Please include the version and error logs, and **remove any keys or tokens first**.
-> For issues with the upstream workbuddy2api itself, use
-> [this repository](https://github.com/utopiask/workbuddy-manager/issues) — the upstream
-> source ships with our releases.
+> For issues with the gateway `gateway/` (workbuddy2api) itself, use
+> [this repository](https://github.com/utopiask/workbuddy-manager/issues) — the gateway
+> source is part of this repository and ships with our releases.
 
 ### Release process
 
@@ -970,9 +1000,9 @@ release notes, and creates a Release with the archives attached.
 - [**LINUX DO**](https://linux.do) — the community where this project is published and discussed
 - [**linux-do/cdk**](https://github.com/linux-do/cdk) (MIT) — design tokens and floating
   dock component; this project's UI follows its visual language
-- [**Sliverkiss/workbuddy2api**](https://github.com/Sliverkiss/workbuddy2api) — the account
-  pool and OpenAI-compatible proxy underneath (MIT; its source is distributed with
-  this project's releases)
+- [**Sliverkiss/workbuddy2api**](https://github.com/Sliverkiss/workbuddy2api) — this
+  repository's gateway component `gateway/` (MIT, copyright the original author; the
+  author's original repository is gone and the source is now maintained here)
 - [**lbjlaq/Antigravity-Manager**](https://github.com/lbjlaq/Antigravity-Manager) — feature
   reference for the console
 

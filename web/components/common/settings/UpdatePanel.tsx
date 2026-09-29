@@ -267,6 +267,18 @@ export function UpdatePanel() {
                   {t('updatePanel.unsigned')}
                 </span>
               )}
+              {/* 默认策略下未签名的 Release 会被放行（status=none），只在 log_tail
+                  里是看不见的——这里补一个醒目的告警徽章，保证「这次更新没验签」
+                  在概览里一眼可见，而不是静默略过。 */}
+              {status?.signature?.status === 'none' && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400"
+                  title={t('updatePanel.unsignedAllowedTitle')}
+                >
+                  <ShieldOff className="h-3 w-3" />
+                  {t('updatePanel.unsigned')}
+                </span>
+              )}
             </div>
           </div>
           <div className="rounded-2xl bg-background/60 px-3.5 py-3">

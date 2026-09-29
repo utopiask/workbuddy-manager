@@ -1,0 +1,20 @@
+本目录是网关源码 workbuddy2api，现作为 workbuddy-manager 仓库的一等组件，随本仓库
+一起构建、测试、打包与发布。
+
+来源
+    原作者 Sliverkiss 的仓库 github.com/Sliverkiss/workbuddy2api（MIT，见同目录 LICENSE）。
+    该上游原仓库已被其作者删除。本仓库以**单次导入提交**收入源码快照，不合并其 git 历史
+    （原始历史不可还原）。
+
+维护
+    自导入起，本目录由 workbuddy-manager 仓库维护与演进，不再依赖外部上游快照或载体
+    Release；仓库内开发目录名为 gateway/，发布包内网关目录名保持 upstream/。
+
+许可
+    MIT License，版权归原作者。再分发或修改请保留 LICENSE 与版权声明，不得删除或改写
+    版权行（Copyright (c) 2026 Sliverkiss）。
+
+运行时数据
+    真实凭据与运行数据不随代码提交：config.json（含 api_key）、auths/（CodeBuddy 账号
+    授权）、data/（运行数据）均已被 .gitignore 忽略，只存在于部署目录（如 /opt/workbuddy2api）。
+    安装 / 升级只增改代码，绝不删除或覆盖这三样。

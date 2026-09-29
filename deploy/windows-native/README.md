@@ -43,10 +43,11 @@ WB2API_LOG_FILE=C:/path/to/workbuddy2api/data/server.err.log
 
 ## 上游可执行文件从哪来
 
+网关源码随发布包分发在 `upstream/`（仓库内开发目录为 `gateway/`），就是这里要构建的那份源码。
 上游用 Go 写，Docker 之外的部署方式需要自己构建：
 
 ```powershell
-cd C:\path\to\workbuddy2api
+cd C:\path\to\upstream
 go build -o wb2api.exe ./cmd/server
 ```
 

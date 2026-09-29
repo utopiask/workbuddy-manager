@@ -844,8 +844,10 @@ class ForkImageWorkflowTest(unittest.TestCase):
     """fork 专用镜像工作流的几条约束（测的是 `deploy/fork-image/` 里的**模板**）。
 
     该工作流**只构建推送镜像**，不创建 Release、不签名 —— 因为签名信任链只覆盖
-    正式发布包，在 fork 上造一个没有 .sig 的 Release 只会产出"看起来能装、实际
-    装不上"的东西（用户侧一键更新会拒绝安装）。
+    正式发布包：在 fork 上造一个没有 .sig 的 Release 只会产出"看起来能装、实际
+    无法验签"的东西（用户侧一键更新默认会放行安装，只留一条 warn 告警，不做
+    完整性验证；只有设了 WB_REQUIRE_SIGNATURE=1 才会拒绝）。镜像本身不参与这套
+    签名，fork 只需要推镜像。
 
     最值得锁的是**镜像名**：原包名 `ghcr.io/<owner>/workbuddy-manager` 在该命名
     空间下已被一个未链接到本仓库的包占用，fork 的 token 对它没有写权限，推送必然
@@ -860,8 +862,9 @@ class ForkImageWorkflowTest(unittest.TestCase):
         wf = self._wf()
         for forbidden in ('gh release create', 'gh release upload', 'gh release delete'):
             self.assertNotIn(forbidden, wf,
-                             f'fork 工作流不该动 Release（{forbidden}）—— 未签名的 Release '
-                             f'会被用户的一键更新拒绝安装')
+                             f'fork 工作流不该动 Release（{forbidden}）—— 未签名的 '
+                             f'Release 在用户侧默认会被放行安装（只留一条 warn 告警），'
+                             f'不做完整性验证，fork 不该产出这种无法验签的产物')
 
     def test_uses_standalone_package_name(self) -> None:
         wf = self._wf()
@@ -951,22 +954,29 @@ class UpstreamSourceFallbackTest(unittest.TestCase):
         self.assertIn('UPSTREAM_SRC="$BUNDLED"', self.sh,
                       '检测到了包内源码却没接到 UPSTREAM_SRC —— 等于没检测')
 
-    def test_release_workflow_embeds_upstream_source(self) -> None:
-        """发布流程要把上游源码塞进包里，且**取不到时不阻断发布**。
+    def test_release_workflow_embeds_gateway_from_repo(self) -> None:
+        """发布流程从仓库 gateway/ 内嵌网关源码，且**打包失败即致命**。
 
-        上游源码不放进本仓库，所以「随包分发」是用户拿到源码
-        的唯一常规渠道。两步都不能少：
-          · 从固定的载体 Release 取（tag upstream-src，标 pre-release 才行——
-            否则它会成为 releases/latest，把面板的更新检查带偏）；
-          · 取不到只记 warning 继续打包（否则一次网络抖动就让整个发布失败）。
+        网关源码已随仓库落地为 gateway/，发布包内沿用 upstream/ 目录名
+        供 install.sh / update.py 对接。载体 Release 链路（upstream-src）已退役，
+        不得再出现在工作流里；源码内的运行时数据与凭据也必须在打包时排除。
+        少了致命校验就会产出缺网关源码的空包，新装用户于是装不上。
         """
         import yaml
         wf = (_ROOT / '.github' / 'workflows' / 'release.yml').read_text(encoding='utf-8')
         yaml.safe_load(wf)   # 先确保 YAML 没写坏
-        self.assertIn('releases/download/upstream-src/workbuddy2api-src.tar.gz', wf,
-                      '没有从载体 Release 取上游源码')
-        self.assertIn("$STAGE/upstream", wf, '取回来的源码没有放进发布目录')
-        self.assertIn('::warning::', wf, '取不到源码时会直接失败 —— 应该只告警')
+        self.assertIn('cp -r gateway "$STAGE/upstream"', wf,
+                      '没有从仓库 gateway/ 内嵌网关源码到包内 upstream/')
+        for excluded in ('$STAGE/upstream/.git', '$STAGE/upstream/config.json',
+                         '$STAGE/upstream/auths', '$STAGE/upstream/data'):
+            self.assertIn(excluded, wf, f'打包时没有排除 {excluded}')
+        self.assertIn('test -f "$STAGE/upstream/docker-compose.yml"', wf,
+                      '缺少「网关源码未打全」的致命校验')
+        self.assertIn('exit 1', wf, '打包失败没有退出 —— 会产出缺网关源码的发布包')
+        self.assertIn('::error::', wf, '打包失败缺少 ::error:: 标记')
+        # 载体链路已退役：不得再出现任何旧契约字样
+        for dead in ('upstream-src', 'workbuddy2api-src.tar.gz', 'UPSTREAM_SRC_URL'):
+            self.assertNotIn(dead, wf, f'仍在引用已退役的载体链路：{dead}')
 
     def test_clone_failure_lists_ways_out(self) -> None:
         """克隆失败要把三条退路写清楚——否则用户只看到 git 的 not found。"""

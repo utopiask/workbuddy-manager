@@ -22,6 +22,9 @@ config.json
 # 开发参考仓库（不提交）
 .ref/
 
+# 根 Makefile 的网关构建产物（make gateway）
+/bin/
+
 # 编辑器 / 系统
 .DS_Store
 .idea/
@@ -123,3 +126,22 @@ local-ops/
 LOCAL_DEPLOY_NOTES.md
 start-all.cmd
 stop-all.cmd
+
+# ── 网关组件（gateway/，原 workbuddy2api 源码）的运行时数据（严禁提交）──────
+# 网关代码已入库；真实凭据与运行数据只存在于部署目录（如 /opt/workbuddy2api），
+# 安装/升级时必须原样保留。上面的全局 data/ 与 config.json 本就覆盖，这里再显式
+# 锚定一遍：将来若放宽全局规则，也不会把这三样误提交。
+gateway/config.json
+gateway/auths/
+gateway/data/
+
+# ── compose 栈的网关数据目录（workbuddy2api-data/）的运行时数据（严禁提交）──
+# 根 docker-compose.yml 把 ./workbuddy2api-data/{auths,data,config.json} 挂进
+# 面板与网关容器：auths/ 是真实账号凭据，config.json 含 api_key，data/ 是运行
+# 数据。全局的 data/ 与 config.json 已覆盖后两者，但 auths/ 不在其中——这里显式
+# 锚定，确保 compose 部署产生的凭据永远不会被误提交。
+# 用无尾斜杠的写法：check-ignore 对「尚不存在的目录」也要能命中（尾斜杠只匹配
+# 真实目录，全新 clone 上会漏判）。
+/workbuddy2api-data/auths
+/workbuddy2api-data/data
+/workbuddy2api-data/config.json

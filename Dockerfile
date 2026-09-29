@@ -12,7 +12,7 @@
 #    这需要 compose 里配 `restart: unless-stopped`（本仓库的 compose 已配好）。
 #
 # 3. **挂载 docker.sock 是可选的，默认提供**。挂上它，容器内的管理端就能像
-#    宿主机部署那样操作上游容器（重载配置 / 读日志 / 一键更新上游）。
+#    宿主机部署那样操作上游容器（重载配置 / 读日志）。
 #
 #    关于安全性的一次修正：初版这里写的是"挂了等于把宿主 root 交给容器，比
 #    少一个功能危险得多"，**这个说法不准确**。事实是——宿主部署时本服务
@@ -132,7 +132,7 @@ ARG DEBIAN_MIRROR=""
 
 # git：一键更新要 git fetch；curl：健康检查与容器健康探针
 # openssh-client：发布包验签（ssh-keygen -Y verify 需要 OpenSSH 8.0+）
-# docker-cli：让「保存设置后重载上游」「上游日志」「更新上游」在本容器内可用
+# docker-cli：让「保存设置后重载上游」「读上游日志」在本容器内可用
 #   （需要挂 /var/run/docker.sock，见 docker-compose.yml；不挂则这几项自动降级
 #    为"请到宿主机操作"，界面会如实提示，不会静默失败）
 #   注意只装 CLI（~50MB），不装 dockerd —— 我们只要控制宿主上的 docker。
@@ -209,11 +209,11 @@ RUN set -eux; \
 # compose 插件：**必须单独装**，官方 docker 静态包里没有它（实测 tar 清单里
 # 只有 docker / dockerd / ctr / containerd*，没有 compose）。
 #
-# 为什么需要（issue #28）：容器版的「一键更新上游」要在本容器内重建上游容器，
-# 而重建靠的就是 compose。原先 update.py 的判据是「docker compose 不可用就退回
-# docker-compose」，但这个镜像里**两个都没有** —— 于是必然走进退回分支，
-# 报 `FileNotFoundError: 'docker-compose'`（exit 127），更新做到一半失败，
-# 而用户看到的只是「重建失败」。
+# 为什么需要（issue #28）：网关源码有变化时（如管理端更新同步了包内网关源码），
+# 要在本容器内重建上游容器，而重建靠的就是 compose。原先 update.py 的判据是
+# 「docker compose 不可用就退回 docker-compose」，但这个镜像里**两个都没有** ——
+# 于是必然走进退回分支，报 `FileNotFoundError: 'docker-compose'`（exit 127），
+# 更新做到一半失败，而用户看到的只是「重建失败」。
 #
 # 装在 /usr/local/lib/docker/cli-plugins（官方约定的插件目录），文件名必须是
 # `docker-compose`（连字符），`docker compose` 子命令才认得它。
@@ -222,7 +222,7 @@ RUN set -eux; \
 #   v5.0.0 移除了内置 builder，`up --build` 改为调用**外部的 buildx 插件**
 #   （`docker-compose/pkg/compose/build_bake.go` 里 `exec.CommandContext` 直接
 #   执行 buildx，要求 buildx ≥ 0.17，且**没有回退分支**）。而我们的镜像只装了
-#   docker CLI + compose，没有 buildx —— 升到 v5 会让「一键更新上游」重新坏在
+#   docker CLI + compose，没有 buildx —— 升到 v5 会让「重建上游容器」重新坏在
 #   `up --build` 上（正是 issue #28 报的那个失败）。
 #   v2 有 `build_classic.go`（内置 builder）作为回退，所以不需要 buildx。
 ARG COMPOSE_VERSION=v2.40.3

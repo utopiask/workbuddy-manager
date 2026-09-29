@@ -30,6 +30,12 @@ users.json
 config.json
 .version
 
+# compose 栈的网关数据目录：真实账号凭据（auths/）与含 api_key 的 config.json，
+# 绝不能烘进面板镜像。gateway/ 是网关 Go 源码树，面板镜像不 COPY 它，排除后
+# 构建上下文不再把整棵 Go 树上传给构建器（发布包里网关在 upstream/，同样排除）。
+workbuddy2api-data
+gateway
+
 # Python 缓存
 __pycache__
 **/__pycache__

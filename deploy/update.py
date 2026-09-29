@@ -13,8 +13,10 @@
 1. **自包含**：仅用标准库，避免「更新过程中依赖被替换」导致脚本自身失败。
 2. **状态外置**：进度写入 JSON 文件，管理端读取该文件展示实时日志。
    （更新会重启管理端，若用 HTTP 流式返回会被中断）
-3. **幂等与安全**：上游更新会保留账号文件与配置；并**强制把端口绑定收敛为
-   127.0.0.1**，避免 upstream 仓库里的 `7863:7863` 覆盖我们的安全加固。
+3. **幂等与安全**：上游更新会保留账号文件与配置；并会把端口绑定收敛为
+   127.0.0.1。仓库内的 `gateway/docker-compose.yml` 已直接写 `127.0.0.1:7863:7863`，
+   这一步对它是无操作；保留是为了兜住旧包/旧部署里上游原样的 `7863:7863`，
+   避免升级时把端口悄悄回退到公网可达。
 """
 from __future__ import annotations
 
@@ -127,7 +129,9 @@ STEP_TIMEOUT = int(os.environ.get('WB_UPDATE_STEP_TIMEOUT') or 900)
 #
 # 签名把「能改代码」与「能发布可信产物」变成两件事：私钥离线保管、不进仓库
 # 也不进 CI（进了 CI 的话，恶意 PR 可以改 workflow 把密钥偷走，签名就白做了）。
-# 攻击者即使拿到合并权限发了版，**签不出名，所有用户的更新会中止**。
+# 攻击者即使拿到合并权限发了版，**签不出名**：未签名的 Release 默认虽会被放行
+# 安装（只留一条可见的 warn 告警），但设了 WB_REQUIRE_SIGNATURE=1 的部署会直接
+# 拒绝；而签名**存在时始终强校验**，篡改或不匹配一律中止。
 #
 # 用 OpenSSH 自带的 ssh-keygen（8.0+，服务器上必有），不引入新依赖。
 # 公钥**内嵌在代码里**而不是读文件：文件可能被一并替换，那信任锚就没了。
@@ -140,6 +144,10 @@ RELEASE_PUBKEY = os.environ.get('WB_RELEASE_PUBKEY') or (
 RELEASE_SIGNER_ID = os.environ.get('WB_RELEASE_SIGNER') or 'release'
 # 置 1 可跳过验签，供更换密钥等紧急情况使用；会在日志里显式告警
 SKIP_SIGNATURE = os.environ.get('WB_SKIP_SIGNATURE') == '1'
+# 置 1 恢复旧行为：Release 缺少 .sig 时拒绝安装。
+# 默认（未设置）不再把「缺签名」当作拒绝更新/发版的硬门槛（spec Phase 1 决策 #7），
+# 但会在报告里留下 warn 级「未签名」提示，保证可审计。签名存在时始终强校验。
+REQUIRE_SIGNATURE = os.environ.get('WB_REQUIRE_SIGNATURE') == '1'
 
 
 # ── 状态写入 ─────────────────────────────────────────────
@@ -191,7 +199,8 @@ class Reporter:
     def set_signature(self, status: str, detail: str = '') -> None:
         """记录签名校验结果，供界面显示「已验签 / 未验签」。
 
-        status: verified（验签通过）/ skipped（走了绕过开关）/ none（未执行）
+        status: verified（验签通过）/ skipped（走了绕过开关）/
+                none（未执行验签：未签名 Release 已按配置放行）
         界面据此给出安心的绿色标记或醒目告警 —— 这是「本次更新是否经过
         完整性验证」唯一的用户可见信号，不能只留在日志里。
         """
@@ -302,6 +311,27 @@ def check_signature(archive: Path, sig_path: Path, rep: Reporter) -> None:
         rep.set_signature('skipped', '已手动跳过（WB_SKIP_SIGNATURE=1）')
         return
 
+    if not sig_path.is_file():
+        # 签名从"强制"降为"可选"（spec Phase 1 决策 #7）：默认未签名放行，但必须
+        # 留下可审计的 warn 级提示——否则等于静默放弃了这条防线。需要旧行为的
+        # 部署设 WB_REQUIRE_SIGNATURE=1 即可恢复硬拒绝。
+        if REQUIRE_SIGNATURE:
+            raise RuntimeError(
+                '该 Release 没有可用的签名文件，已拒绝安装（WB_REQUIRE_SIGNATURE=1）。\n'
+                '  正常发布流程会附带 .tar.gz.sig；缺失说明发布流程可能被改动。'
+            )
+        rep.log(
+            '⚠️ 该 Release 未签名（缺少 .tar.gz.sig），已按配置允许安装；'
+            '本次更新未经过完整性验证。如需强制验签请设 WB_REQUIRE_SIGNATURE=1',
+            'warn',
+        )
+        rep.set_signature('none', '未签名，已按配置允许安装（WB_REQUIRE_SIGNATURE=1 可强制）')
+        return
+
+    # 注意：能走到这里说明签名文件**存在**，才会拿公钥去验。若包未签名，上面的
+    # 可选分支已按默认策略放行（status=none）——因此「占位公钥 + 未签名包」不再
+    # 被这里拒绝，这是 optional-by-default 的预期行为；只有签名存在却验不过时
+    # 才 fail-closed。
     if 'AAAA_REPLACE_ME' in RELEASE_PUBKEY:
         raise RuntimeError(
             '发布包签名公钥未配置（仍是占位值），已拒绝自动更新。\n'
@@ -310,12 +340,6 @@ def check_signature(archive: Path, sig_path: Path, rep: Reporter) -> None:
             '  请把维护者提供的公钥写入 deploy/update.py 的 RELEASE_PUBKEY，'
             '或设 WB_RELEASE_PUBKEY 环境变量；'
             '确需临时跳过可设 WB_SKIP_SIGNATURE=1（不推荐）。'
-        )
-
-    if not sig_path.is_file():
-        raise RuntimeError(
-            '该 Release 没有可用的签名文件，已拒绝安装。\n'
-            '  正常发布流程会附带 .tar.gz.sig；缺失说明发布流程可能被改动。'
         )
 
     # ssh-keygen 要求 allowed_signers 格式（纯 .pub 文件不接受）
@@ -404,8 +428,9 @@ def _port_converged(text: str) -> str:
 def enforce_local_bind(rep: Reporter) -> None:
     """把 compose 的端口绑定收敛为仅本机。
 
-    upstream 仓库里是 `7863:7863`（公网可达）；我们的安全基线要求
-    `127.0.0.1:7863:7863`。每次更新后都要重新施加，否则会悄悄回退。
+    仓库内的 `gateway/docker-compose.yml` 已直接写 `127.0.0.1:7863:7863`，本步
+    对它无操作；保留是为了兜住旧包/旧部署里上游原样的 `7863:7863`（公网可达），
+    避免升级后悄悄回退到 0.0.0.0。每次更新后都重新施加一遍。
     """
     compose = UPSTREAM_DIR / 'docker-compose.yml'
     if not compose.is_file():
@@ -541,7 +566,7 @@ def _fetch_failed_hint(out: str, pinned: str = '') -> str:
         return (f'{target}的远端仓库取不到代码（发布包分发的那份不受影响）。\n'
                 '  本次沿用现有源码继续。要更新上游代码：管理端一键更新会带上包内那份；\n'
                 '  也可以把 WB_UPSTREAM_REPO 指向你自己的副本，或用 UPSTREAM_SRC 换一份源码\n'
-                '  （见 deploy/README.md 的「上游源码从哪来」）。')
+                '  （见 deploy/README.md 的「网关源码从哪来」）。')
     return (f'{target}拉取失败（提交/标签是否存在？网络是否正常？）'
             + (f'：{out.strip()[:200]}' if out.strip() else ''))
 
@@ -744,7 +769,7 @@ def _explain_deploy_risk(rep: Reporter, modified: list[str], added: list[str],
     无法判断严重性——实测有用户专门来问「这要不要紧」。差异本身分三类，
     处理方式完全不同：
 
-      1. 只新增了工具脚本（如 check-upstream.sh）→ **无需任何操作**
+      1. 只新增了工具脚本（如 verify-release.sh）→ **无需任何操作**
       2. 修改了非信任锚文件（如 systemd 单元）→ 看一眼即可，想要新功能就覆盖
       3. 修改了信任锚（update.py / 公钥）→ **必须人工比对**，确认是官方改动
          而非被替换，再覆盖；这是整条供应链防护的最后一关
@@ -1194,8 +1219,9 @@ def update_manager(rep: Reporter) -> None:
         # 好几分钟，还会把上游短暂停掉。
         changed = _sync_bundled_upstream(new_root / 'upstream', rep)
         if changed:
-            # 包内那份 compose 是**上游原样**（`7863:7863`，公网可达），而端口收敛
-            # 是在 update_upstream 里做的——那一步在本函数之前。同步会把它盖掉，
+            # 包内那份 compose 可能是上游原样的 `7863:7863`（公网可达）——仓库内的
+            # gateway/docker-compose.yml 已写 127.0.0.1，但旧包/旧部署未必，而端口
+            # 收敛是在 update_upstream 里做的——那一步在本函数之前。同步会把它盖掉，
             # 所以这里必须**重新施加**安全基线，否则上游会重新暴露到 0.0.0.0。
             enforce_local_bind(rep)
             rep.log('上游源码有变化，重建容器使其生效…')

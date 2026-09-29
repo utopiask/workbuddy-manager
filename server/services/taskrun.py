@@ -285,8 +285,8 @@ def available() -> tuple[bool, str]:
             '  · 官方镜像部署：本面板会尝试用 `docker cp` 从上游容器里提取脚本，'
             '但它需要能访问 docker（挂载 /var/run/docker.sock，且容器名与 '
             'WB2API_CONTAINER 一致）。请检查这两项，然后点「预览」重试。\n'
-            '  · 源码部署：请确认上游目录（WB_UPSTREAM_DIR）已挂载且版本较新，'
-            '可到「设置 → 系统更新」更新上游。'
+            '  · 源码部署：请确认网关源码目录（WB_UPSTREAM_DIR）已挂载且版本较新，'
+            '在仓库里 `git pull && docker compose up -d --build` 即可更新。'
         )
     if not config.AUTH_DIR.is_dir():
         return False, (

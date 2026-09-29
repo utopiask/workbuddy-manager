@@ -5,14 +5,19 @@
 #
 # 产物为可直接部署的压缩包（含 server/ 与已构建的 web/out/）。
 #
+# 结构：gateway / python / web 三个 job 是发布闸门（任一失败则不发布），
+# 第四个 job `release` 通过 needs 依赖三者，负责打包、建 Release 与推镜像。
+#
 # ── 关于签名（重要）──────────────────────────────────────────
 # 本工作流**不持有签名私钥**，也不代替维护者签名：
 #   * 私钥绝不进 CI —— 恶意 PR 合并后能改 workflow 里的任意步骤，
 #     把密钥放在这里等于直接交给攻击者。
 #   * 签名在维护者本机完成（见步骤末尾的 step summary 与
 #     docs/release-signing.md），.sig 作为 Release 资产上传。
-#   * 用户侧 deploy/update.py 强制验签，未签名的 Release 会被拒绝安装；
-#     本 workflow 在检测到已签名后也**不再覆盖 tar.gz**，避免使签名失效。
+#   * 用户侧 deploy/update.py 默认允许未签名的 Release 安装（只留一条可见的
+#     warn 告警）；设了 WB_REQUIRE_SIGNATURE=1 才强制拒绝，而签名**存在时
+#     始终强校验**。本 workflow 在检测到已签名后也**不再覆盖 tar.gz**，
+#     避免使签名失效。
 name: Release
 
 on:
@@ -34,8 +39,15 @@ permissions:
   packages: write
 
 jobs:
-  release:
+  # ── 解析发布 ref：所有 job 必须构建/打包同一个 ref ───────────────
+  # 手动补发已有 tag 时，若闸门 job 各自 checkout 默认分支，会拿分支 HEAD 的
+  # 前端与 Python 代码去装配 tag 的 server/，产生版本错配。这里统一解析一次，
+  # 后续 job 一律按 outputs.tag checkout。
+  resolve:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      version: ${{ steps.vars.outputs.version }}
     steps:
       - name: 解析版本号
         id: vars
@@ -48,10 +60,63 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=${TAG#v}" >> $GITHUB_OUTPUT
 
+  # ── 闸门 1：Go 网关（Task 1 引入的 gateway/ 模块）────────────────
+  # 版本以 gateway/go.mod 为准（1.22.5），避免 CI 与本地 go.mod 漂移。
+  gateway:
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.vars.outputs.tag }}
-          fetch-depth: 0
+          ref: ${{ needs.resolve.outputs.tag }}
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: gateway/go.mod
+          cache-dependency-path: gateway/go.sum
+
+      - name: Go vet
+        working-directory: gateway
+        run: go vet ./...
+
+      - name: Go 单元测试
+        working-directory: gateway
+        run: go test ./...
+
+  # ── 闸门 2：后端 Python 测试 ─────────────────────────────────────
+  python:
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 后端语法与导入自检
+        run: |
+          python3 -m compileall -q server
+          echo "后端语法检查通过"
+
+      - name: 后端单元测试
+        run: |
+          python3 -m pip install --quiet -r server/requirements.txt
+          python3 -m unittest discover -s server/tests -t . -v
+
+  # ── 闸门 3：前端构建 ────────────────────────────────────────────
+  # 只构建并上传 web/out 作为 artifact；打包与发布在 release job 完成。
+  web:
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
 
       - name: 安装 Node
         uses: actions/setup-node@v4
@@ -74,20 +139,33 @@ jobs:
           test -f web/out/index.html || { echo "构建失败：缺少 web/out/index.html"; exit 1; }
           echo "构建产物大小：$(du -sh web/out | cut -f1)"
 
-      - name: 后端语法与导入自检
-        run: |
-          python3 -m compileall -q server
-          echo "后端语法检查通过"
+      - name: 上传前端构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-out
+          path: web/out
+          if-no-files-found: error
 
-      - name: 后端单元测试
-        run: |
-          python3 -m pip install --quiet -r server/requirements.txt
-          python3 -m unittest discover -s server/tests -t . -v
+  # ── 发布：三个闸门都通过后才执行 ─────────────────────────────────
+  release:
+    needs: [resolve, gateway, python, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+          fetch-depth: 0
+
+      - name: 下载前端构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: web-out
+          path: web/out
 
       - name: 组装发布目录
         id: pack
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           STAGE="workbuddy-manager-${TAG}"
           rm -rf "$STAGE" && mkdir -p "$STAGE"
           cp -r server "$STAGE/"
@@ -103,25 +181,25 @@ jobs:
           # 不替换根目录文件。放进 server/ 后，任何部署（含从旧版升上来的）
           # 都拿得到更新日志，避免界面报「未找到更新日志文件」。
           cp CHANGELOG.md "$STAGE/server/CHANGELOG.md"
-          # ── 上游源码随包分发 ─────────────────────────────────────────
-          # 上游源码不放进本仓库（不是我们的代码），其公开地址也已不可用。
-          # 用户要能装，所以源码从固定的载体 Release（tag upstream-src，
-          # 标为 pre-release 以免影响 releases/latest）取回来塞进包里：
+          # ── 内嵌网关源码（Task 1 引入的仓库 gateway/）────────────────
+          # 目录映射：仓库内开发目录 gateway/ → 发布包内 upstream/。
+          # 包内沿用 upstream/ 是为了让 install.sh / update.py 无缝对接：
           #   · 新装：install.sh 见到 upstream/ 直接用（离线可装）
           #   · 升级：update.py 把它同步进上游目录（保留 config/auths/data）
-          # 取不到**不致命**（网络抖动、载体未建）：记一条醒目日志继续打包，
-          # 用户仍可用 UPSTREAM_SRC 自己指定源码。
-          UPSTREAM_SRC_URL="${UPSTREAM_SRC_URL:-https://github.com/${{ github.repository }}/releases/download/upstream-src/workbuddy2api-src.tar.gz}"
-          mkdir -p "$STAGE/upstream"
-          if curl -fsSL --retry 3 --retry-delay 2 --max-time 120 \
-                 "$UPSTREAM_SRC_URL" -o /tmp/upstream-src.tar.gz \
-             && tar -xzf /tmp/upstream-src.tar.gz -C "$STAGE/upstream" --strip-components=1 \
-             && [ -f "$STAGE/upstream/docker-compose.yml" ]; then
-            echo "已内嵌上游源码：$(find "$STAGE/upstream" -type f | wc -l) 个文件"
-          else
-            echo "::warning::取不到上游源码包（$UPSTREAM_SRC_URL）——本次发布包不含 upstream/，新装用户需自备源码（UPSTREAM_SRC）"
-            rmdir "$STAGE/upstream" 2>/dev/null || true
-          fi
+          cp -r gateway "$STAGE/upstream"
+          rm -rf "$STAGE/upstream/.git" "$STAGE/upstream/config.json" \
+                 "$STAGE/upstream/auths" "$STAGE/upstream/data"
+          # 打包失败必须致命：不允许产出缺网关源码的发布包
+          test -f "$STAGE/upstream/docker-compose.yml" || { echo "::error::gateway/ 未正确打包"; exit 1; }
+          # ── 改写包内 compose 的网关构建上下文 ────────────────────────
+          # 目录映射：仓库内 gateway/ → 发布包内 upstream/（见上一段 cp）。根 compose
+          # 里网关写的是 `build: ./gateway`，但包内网关源码在 upstream/ —— 不改写的话
+          # Docker 用户在发布包里 `docker compose up` 会报找不到 ./gateway（构建直接
+          # 失败）。这里改写为 ./upstream，与 install.sh 的目录口径保持一致。
+          sed -i 's#build: \./gateway#build: ./upstream#' "$STAGE/docker-compose.yml"
+          grep -q 'build: ./upstream' "$STAGE/docker-compose.yml" \
+            || { echo "::error::包内 compose 未改写为 build: ./upstream"; exit 1; }
+          echo "已内嵌网关源码：$(find "$STAGE/upstream" -type f | wc -l) 个文件"
           # 写入版本标记：管理端「系统更新」页与安装流程据此显示当前版本
           echo "${TAG}" > "$STAGE/.version"
           # 不含运行时数据与凭据
@@ -134,7 +212,7 @@ jobs:
 
       - name: 生成发布说明
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           # 优先取 CHANGELOG 中该版本的段落；取不到则退回提交摘要
           python3 - "$TAG" > RELEASE_NOTES.md <<'PY'
           import re, sys, subprocess
@@ -170,7 +248,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           STAGE="${{ steps.pack.outputs.stage }}"
           if gh release view "$TAG" >/dev/null 2>&1 && \
              gh release view "$TAG" --json assets -q '.assets[].name' | grep -qx "${STAGE}.tar.gz.sig"; then
@@ -185,7 +263,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           STAGE="${{ steps.pack.outputs.stage }}"
           if [ "${{ steps.sigcheck.outputs.has_sig }}" = "1" ]; then
             # 一旦有签名就绝不再覆盖 tar.gz：重新打包会产生不同的字节流，
@@ -211,7 +289,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.vars.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           STAGE="${{ steps.pack.outputs.stage }}"
           gh release download "$TAG" --pattern "${STAGE}.tar.gz" --pattern "${STAGE}.tar.gz.sig" --dir . --clobber
           if [ ! -f deploy/release-signing-key.pub ]; then
@@ -289,7 +367,7 @@ jobs:
           push: true
           # 镜像标签用小写（GHCR 要求），去掉 v 前缀
           tags: |
-            ${{ steps.image.outputs.name }}:${{ steps.vars.outputs.version }}
+            ${{ steps.image.outputs.name }}:${{ needs.resolve.outputs.version }}
             ${{ steps.image.outputs.name }}:latest
           # 关掉 provenance 证明：它会在 manifest list 里塞入 attestation 条目，
           # 某些旧版 Docker（< 25）拉取时会报 unknown/unknown platform。
@@ -319,16 +397,18 @@ jobs:
 
           ```bash
           # 在本机（私钥所在机器）：
-          gh release download ${{ steps.vars.outputs.tag }} \
+          gh release download ${{ needs.resolve.outputs.tag }} \
             --pattern '${{ steps.pack.outputs.stage }}.tar.gz'
           ssh-keygen -Y sign -f ~/.ssh/workbuddy-release -n file \
             '${{ steps.pack.outputs.stage }}.tar.gz'
-          gh release upload ${{ steps.vars.outputs.tag }} \
+          gh release upload ${{ needs.resolve.outputs.tag }} \
             '${{ steps.pack.outputs.stage }}.tar.gz.sig'
           ```
 
-          > 一键更新（deploy/update.py）会校验该签名，**没有 .sig 的 Release
-          > 会被所有用户拒绝安装**。所以这一步不是可选的。
+          > 一键更新（deploy/update.py）会校验该签名：**签名存在时永远强校验**；
+          > 缺少 .sig 的 Release 默认仍可安装（只留一条可见的 warn 告警），仅在
+          > 部署侧设了 `WB_REQUIRE_SIGNATURE=1` 时才被拒绝。要供应链防护，这一步
+          > 就不是可选的。
 
           部署方式（解压后）：
           ```bash
@@ -341,6 +421,6 @@ jobs:
 
           或者用容器部署（另见仓库内 docker-compose.yml）：
           ```bash
-          docker pull ghcr.io/${{ github.repository_owner }}/workbuddy-manager:${{ steps.vars.outputs.version }}
+          docker pull ghcr.io/${{ github.repository_owner }}/workbuddy-manager:${{ needs.resolve.outputs.version }}
           ```
           EOF
