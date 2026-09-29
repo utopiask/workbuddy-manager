@@ -257,13 +257,29 @@ class UpdateEndToEndTest(unittest.TestCase):
         self.assertEqual((inst / '.version').read_text(encoding='utf-8').strip(), 'v1.0.0')
         self.assertFalse((inst / 'CHANGELOG.md').exists())
 
-    def test_unsigned_release_aborts(self) -> None:
-        """攻击者控制发布渠道后，最省事的做法就是干脆不带签名。"""
+    def test_unsigned_release_allowed_by_default(self) -> None:
+        """默认策略：未签名 Release 不再阻断更新（但必须告警、可审计）。
+
+        spec Phase 1 决策 #7：缺失 .sig 从硬门槛降为"可选"。未签名包会被安装，
+        因此必须留下醒目的告警，并如实报告"未经完整性验证"。
+        """
         inst = self._make_install('nosig')
         pkg, _sig = self._make_release('nosig')
         mod = self._load(inst)
         ok, rep = self._run_update(mod, pkg, None)
-        self.assertFalse(ok)
+        self.assertTrue(ok, rep.text())
+        self.assertTrue(rep.warned(), '放行未签名 Release 却没有告警')
+        self.assertIn('未签名', rep.text())
+        # 未签名的包确实装上了
+        self.assertIn("version='9.9.9'", (inst / 'server' / 'main.py').read_text(encoding='utf-8'))
+
+    def test_unsigned_release_rejected_when_required(self) -> None:
+        """WB_REQUIRE_SIGNATURE=1 恢复强制：未签名 Release 必须中止且不落盘。"""
+        inst = self._make_install('nosig-req')
+        pkg, _sig = self._make_release('nosig-req')
+        mod = self._load(inst, WB_REQUIRE_SIGNATURE='1')
+        ok, rep = self._run_update(mod, pkg, None)
+        self.assertFalse(ok, '强制模式下未签名 Release 竟然装上了')
         self.assertIn('没有可用的签名文件', rep.text())
         self.assertIn('# OLD', (inst / 'server' / 'main.py').read_text(encoding='utf-8'))
 

@@ -140,6 +140,10 @@ RELEASE_PUBKEY = os.environ.get('WB_RELEASE_PUBKEY') or (
 RELEASE_SIGNER_ID = os.environ.get('WB_RELEASE_SIGNER') or 'release'
 # 置 1 可跳过验签，供更换密钥等紧急情况使用；会在日志里显式告警
 SKIP_SIGNATURE = os.environ.get('WB_SKIP_SIGNATURE') == '1'
+# 置 1 恢复旧行为：Release 缺少 .sig 时拒绝安装。
+# 默认（未设置）不再把「缺签名」当作拒绝更新/发版的硬门槛（spec Phase 1 决策 #7），
+# 但会在报告里留下 warn 级「未签名」提示，保证可审计。签名存在时始终强校验。
+REQUIRE_SIGNATURE = os.environ.get('WB_REQUIRE_SIGNATURE') == '1'
 
 
 # ── 状态写入 ─────────────────────────────────────────────
@@ -191,7 +195,8 @@ class Reporter:
     def set_signature(self, status: str, detail: str = '') -> None:
         """记录签名校验结果，供界面显示「已验签 / 未验签」。
 
-        status: verified（验签通过）/ skipped（走了绕过开关）/ none（未执行）
+        status: verified（验签通过）/ skipped（走了绕过开关）/
+                none（未执行验签：未签名 Release 已按配置放行）
         界面据此给出安心的绿色标记或醒目告警 —— 这是「本次更新是否经过
         完整性验证」唯一的用户可见信号，不能只留在日志里。
         """
@@ -302,6 +307,23 @@ def check_signature(archive: Path, sig_path: Path, rep: Reporter) -> None:
         rep.set_signature('skipped', '已手动跳过（WB_SKIP_SIGNATURE=1）')
         return
 
+    if not sig_path.is_file():
+        # 签名从"强制"降为"可选"（spec Phase 1 决策 #7）：默认未签名放行，但必须
+        # 留下可审计的 warn 级提示——否则等于静默放弃了这条防线。需要旧行为的
+        # 部署设 WB_REQUIRE_SIGNATURE=1 即可恢复硬拒绝。
+        if REQUIRE_SIGNATURE:
+            raise RuntimeError(
+                '该 Release 没有可用的签名文件，已拒绝安装（WB_REQUIRE_SIGNATURE=1）。\n'
+                '  正常发布流程会附带 .tar.gz.sig；缺失说明发布流程可能被改动。'
+            )
+        rep.log(
+            '⚠️ 该 Release 未签名（缺少 .tar.gz.sig），已按配置允许安装；'
+            '本次更新未经过完整性验证。如需强制验签请设 WB_REQUIRE_SIGNATURE=1',
+            'warn',
+        )
+        rep.set_signature('none', '未签名，已按配置允许安装（WB_REQUIRE_SIGNATURE=1 可强制）')
+        return
+
     if 'AAAA_REPLACE_ME' in RELEASE_PUBKEY:
         raise RuntimeError(
             '发布包签名公钥未配置（仍是占位值），已拒绝自动更新。\n'
@@ -310,12 +332,6 @@ def check_signature(archive: Path, sig_path: Path, rep: Reporter) -> None:
             '  请把维护者提供的公钥写入 deploy/update.py 的 RELEASE_PUBKEY，'
             '或设 WB_RELEASE_PUBKEY 环境变量；'
             '确需临时跳过可设 WB_SKIP_SIGNATURE=1（不推荐）。'
-        )
-
-    if not sig_path.is_file():
-        raise RuntimeError(
-            '该 Release 没有可用的签名文件，已拒绝安装。\n'
-            '  正常发布流程会附带 .tar.gz.sig；缺失说明发布流程可能被改动。'
         )
 
     # ssh-keygen 要求 allowed_signers 格式（纯 .pub 文件不接受）
