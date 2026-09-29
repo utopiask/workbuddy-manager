@@ -844,8 +844,10 @@ class ForkImageWorkflowTest(unittest.TestCase):
     """fork 专用镜像工作流的几条约束（测的是 `deploy/fork-image/` 里的**模板**）。
 
     该工作流**只构建推送镜像**，不创建 Release、不签名 —— 因为签名信任链只覆盖
-    正式发布包，在 fork 上造一个没有 .sig 的 Release 只会产出"看起来能装、实际
-    装不上"的东西（用户侧一键更新会拒绝安装）。
+    正式发布包：在 fork 上造一个没有 .sig 的 Release 只会产出"看起来能装、实际
+    无法验签"的东西（用户侧一键更新默认会放行安装，只留一条 warn 告警，不做
+    完整性验证；只有设了 WB_REQUIRE_SIGNATURE=1 才会拒绝）。镜像本身不参与这套
+    签名，fork 只需要推镜像。
 
     最值得锁的是**镜像名**：原包名 `ghcr.io/<owner>/workbuddy-manager` 在该命名
     空间下已被一个未链接到本仓库的包占用，fork 的 token 对它没有写权限，推送必然
@@ -860,8 +862,9 @@ class ForkImageWorkflowTest(unittest.TestCase):
         wf = self._wf()
         for forbidden in ('gh release create', 'gh release upload', 'gh release delete'):
             self.assertNotIn(forbidden, wf,
-                             f'fork 工作流不该动 Release（{forbidden}）—— 未签名的 Release '
-                             f'会被用户的一键更新拒绝安装')
+                             f'fork 工作流不该动 Release（{forbidden}）—— 未签名的 '
+                             f'Release 在用户侧默认会被放行安装（只留一条 warn 告警），'
+                             f'不做完整性验证，fork 不该产出这种无法验签的产物')
 
     def test_uses_standalone_package_name(self) -> None:
         wf = self._wf()

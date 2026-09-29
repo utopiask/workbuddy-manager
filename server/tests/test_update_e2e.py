@@ -295,8 +295,8 @@ class UpdateEndToEndTest(unittest.TestCase):
 
     def test_bootstrap_from_old_updater_installs_new_deploy(self) -> None:
         """鸡生蛋：旧版更新器（会把 deploy/ 整体拷过去）装上新版后，
-        新的验签逻辑就位 —— 这是从"没有验签"过渡到"强制验签"的唯一路径，
-        必须确保它确实成立，否则所有老部署都会卡死。"""
+        新的验签逻辑就位 —— 这是从"完全没有验签"过渡到"未签名默认放行、
+        已签名强校验"的唯一路径，必须确保它确实成立，否则所有老部署都会卡死。"""
         inst = self._make_install('boot')
         # 模拟旧版 update.py：没有 check_signature，且会同步 deploy/
         old_updater = "import shutil\nfrom pathlib import Path\n"

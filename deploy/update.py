@@ -13,8 +13,10 @@
 1. **自包含**：仅用标准库，避免「更新过程中依赖被替换」导致脚本自身失败。
 2. **状态外置**：进度写入 JSON 文件，管理端读取该文件展示实时日志。
    （更新会重启管理端，若用 HTTP 流式返回会被中断）
-3. **幂等与安全**：上游更新会保留账号文件与配置；并**强制把端口绑定收敛为
-   127.0.0.1**，避免 upstream 仓库里的 `7863:7863` 覆盖我们的安全加固。
+3. **幂等与安全**：上游更新会保留账号文件与配置；并会把端口绑定收敛为
+   127.0.0.1。仓库内的 `gateway/docker-compose.yml` 已直接写 `127.0.0.1:7863:7863`，
+   这一步对它是无操作；保留是为了兜住旧包/旧部署里上游原样的 `7863:7863`，
+   避免升级时把端口悄悄回退到公网可达。
 """
 from __future__ import annotations
 
@@ -127,7 +129,9 @@ STEP_TIMEOUT = int(os.environ.get('WB_UPDATE_STEP_TIMEOUT') or 900)
 #
 # 签名把「能改代码」与「能发布可信产物」变成两件事：私钥离线保管、不进仓库
 # 也不进 CI（进了 CI 的话，恶意 PR 可以改 workflow 把密钥偷走，签名就白做了）。
-# 攻击者即使拿到合并权限发了版，**签不出名，所有用户的更新会中止**。
+# 攻击者即使拿到合并权限发了版，**签不出名**：未签名的 Release 默认虽会被放行
+# 安装（只留一条可见的 warn 告警），但设了 WB_REQUIRE_SIGNATURE=1 的部署会直接
+# 拒绝；而签名**存在时始终强校验**，篡改或不匹配一律中止。
 #
 # 用 OpenSSH 自带的 ssh-keygen（8.0+，服务器上必有），不引入新依赖。
 # 公钥**内嵌在代码里**而不是读文件：文件可能被一并替换，那信任锚就没了。
@@ -324,6 +328,10 @@ def check_signature(archive: Path, sig_path: Path, rep: Reporter) -> None:
         rep.set_signature('none', '未签名，已按配置允许安装（WB_REQUIRE_SIGNATURE=1 可强制）')
         return
 
+    # 注意：能走到这里说明签名文件**存在**，才会拿公钥去验。若包未签名，上面的
+    # 可选分支已按默认策略放行（status=none）——因此「占位公钥 + 未签名包」不再
+    # 被这里拒绝，这是 optional-by-default 的预期行为；只有签名存在却验不过时
+    # 才 fail-closed。
     if 'AAAA_REPLACE_ME' in RELEASE_PUBKEY:
         raise RuntimeError(
             '发布包签名公钥未配置（仍是占位值），已拒绝自动更新。\n'
@@ -420,8 +428,9 @@ def _port_converged(text: str) -> str:
 def enforce_local_bind(rep: Reporter) -> None:
     """把 compose 的端口绑定收敛为仅本机。
 
-    upstream 仓库里是 `7863:7863`（公网可达）；我们的安全基线要求
-    `127.0.0.1:7863:7863`。每次更新后都要重新施加，否则会悄悄回退。
+    仓库内的 `gateway/docker-compose.yml` 已直接写 `127.0.0.1:7863:7863`，本步
+    对它无操作；保留是为了兜住旧包/旧部署里上游原样的 `7863:7863`（公网可达），
+    避免升级后悄悄回退到 0.0.0.0。每次更新后都重新施加一遍。
     """
     compose = UPSTREAM_DIR / 'docker-compose.yml'
     if not compose.is_file():
@@ -1210,8 +1219,9 @@ def update_manager(rep: Reporter) -> None:
         # 好几分钟，还会把上游短暂停掉。
         changed = _sync_bundled_upstream(new_root / 'upstream', rep)
         if changed:
-            # 包内那份 compose 是**上游原样**（`7863:7863`，公网可达），而端口收敛
-            # 是在 update_upstream 里做的——那一步在本函数之前。同步会把它盖掉，
+            # 包内那份 compose 可能是上游原样的 `7863:7863`（公网可达）——仓库内的
+            # gateway/docker-compose.yml 已写 127.0.0.1，但旧包/旧部署未必，而端口
+            # 收敛是在 update_upstream 里做的——那一步在本函数之前。同步会把它盖掉，
             # 所以这里必须**重新施加**安全基线，否则上游会重新暴露到 0.0.0.0。
             enforce_local_bind(rep)
             rep.log('上游源码有变化，重建容器使其生效…')
