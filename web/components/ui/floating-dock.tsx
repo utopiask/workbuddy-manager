@@ -386,16 +386,6 @@ const IconContainer = memo(
         damping: 12,
       });
 
-      const [hovered, setHovered] = useState(false);
-
-      const handleMouseEnter = useCallback(() => {
-        setHovered(true);
-      }, []);
-
-      const handleMouseLeave = useCallback(() => {
-        setHovered(false);
-      }, []);
-
       const Element = customComponent ? 'div' : href ? 'a' : 'button';
       const elementProps = customComponent ? {} : href ?
       {
@@ -409,32 +399,35 @@ const IconContainer = memo(
 
       return (
         <Element {...elementProps}>
-          <motion.div
-            ref={ref}
-            style={{width, height}}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            className="relative flex aspect-square items-center justify-center rounded-full bg-gray-200 cursor-pointer dark:bg-neutral-800"
-          >
-            <AnimatePresence>
-              {hovered && (
-                <motion.div
-                  initial={{opacity: 0, y: 10, x: '-50%'}}
-                  animate={{opacity: 1, y: 0, x: '-50%'}}
-                  exit={{opacity: 0, y: 2, x: '-50%'}}
-                  className="absolute -top-8 left-1/2 w-fit rounded-md border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs whitespace-pre text-neutral-700 dark:border-neutral-900 dark:bg-neutral-800 dark:text-white"
-                >
-                  {tooltip || title}
-                </motion.div>
-              )}
-            </AnimatePresence>
+          {/*
+           * 【常驻标签】标题原来只在 hover 时以 tooltip 浮在图标上方，鼠标一移开就
+           * 消失，触屏上更要先按住才看得到名字。现在改成常驻标签固定在图标下方：
+           *   · 外层用 span 不用 div —— Element 可能是 <a>/<button>，按钮里塞 div
+           *     是非法嵌套；
+           *   · 父容器 items-end + 本列 flex-col：图标盒仍走原来的放大动画，标签不
+           *     参与动画，所以放大时标签不抖、也不被顶走（列底对齐，图标向上长）；
+           *   · 标签限宽 + truncate，避免英文标题（Dashboard / Playground）把底栏撑宽。
+           */}
+          <span className="flex flex-col items-center gap-[3px]">
             <motion.div
-              style={{width: widthIcon, height: heightIcon}}
-              className="flex items-center justify-center"
+              ref={ref}
+              style={{width, height}}
+              className="relative flex aspect-square items-center justify-center rounded-full bg-gray-200 cursor-pointer dark:bg-neutral-800"
             >
-              {customComponent || icon}
+              <motion.div
+                style={{width: widthIcon, height: heightIcon}}
+                className="flex items-center justify-center"
+              >
+                {customComponent || icon}
+              </motion.div>
             </motion.div>
-          </motion.div>
+            <span
+              title={tooltip || title}
+              className="pointer-events-none max-w-[3.75rem] truncate text-[10px] leading-none text-neutral-600 dark:text-neutral-300"
+            >
+              {title}
+            </span>
+          </span>
         </Element>
       );
     },
