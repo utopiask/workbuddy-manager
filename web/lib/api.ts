@@ -1,5 +1,6 @@
 import axios, {AxiosError} from 'axios';
 import {BASE_PATH} from './base-path';
+import {createGetCache} from './get-cache';
 import {t, tp} from './i18n';
 import type {Realm} from './realm-context';
 import type {
@@ -111,15 +112,44 @@ http.interceptors.response.use(
   },
 );
 
-const get = async <T>(url: string, params?: Record<string, unknown>): Promise<T> =>
-  (await http.get<T>(url, {params})).data;
-const post = async <T>(url: string, body?: unknown): Promise<T> =>
-  (await http.post<T>(url, body)).data;
-const patch = async <T>(url: string, body?: unknown): Promise<T> =>
-  (await http.patch<T>(url, body)).data;
-const put = async <T>(url: string, body?: unknown): Promise<T> =>
-  (await http.put<T>(url, body)).data;
-const del = async <T>(url: string): Promise<T> => (await http.delete<T>(url)).data;
+/* ── GET 结果缓存（见 lib/get-cache.ts）─────────────────
+ * 同一 url+params 在 15s TTL 内命中缓存、并发请求去重；任何成功的写操作清空缓存。
+ * 轮询 / 实时状态类接口在黑名单里，永不缓存。需要强制新鲜的地方（手动刷新按钮）
+ * 先调 invalidateApiCache()，或给 get 传 {force: true}。
+ */
+const getCache = createGetCache();
+
+/** 清空 GET 缓存（写操作后自动调用；手动刷新按钮也应先调它）。 */
+export function invalidateApiCache(): void {
+  getCache.invalidate();
+}
+
+const get = <T>(
+  url: string,
+  params?: Record<string, unknown>,
+  opts?: {force?: boolean},
+): Promise<T> =>
+  getCache.run<T>(url, params, async () => (await http.get<T>(url, {params})).data, opts);
+const post = async <T>(url: string, body?: unknown): Promise<T> => {
+  const data = (await http.post<T>(url, body)).data;
+  invalidateApiCache();
+  return data;
+};
+const patch = async <T>(url: string, body?: unknown): Promise<T> => {
+  const data = (await http.patch<T>(url, body)).data;
+  invalidateApiCache();
+  return data;
+};
+const put = async <T>(url: string, body?: unknown): Promise<T> => {
+  const data = (await http.put<T>(url, body)).data;
+  invalidateApiCache();
+  return data;
+};
+const del = async <T>(url: string): Promise<T> => {
+  const data = (await http.delete<T>(url)).data;
+  invalidateApiCache();
+  return data;
+};
 
 /* ── 鉴权 ───────────────────────────────────────────── */
 export const authApi = {
@@ -334,7 +364,8 @@ export const upstreamApi = {
 export const modelApi = {
   /** 指定版本的模型目录；force=true 绕过 5 分钟缓存 */
   catalog: (realm: Realm = 'cn', force = false) =>
-    get<ModelCatalog>('/api/model-catalog', {realm, force}),
+    // force 时同时绕过本地 GET 缓存：否则点「重新拉取」拿到的还是 15 秒内的那一份
+    get<ModelCatalog>('/api/model-catalog', {realm, force}, {force}),
 };
 
 /* ── 聊天测试台 ─────────────────────────────────────── */
@@ -582,7 +613,9 @@ export type {Account};
 export const systemApi = {
   updateStatus: () => get<UpdateStatus>('/api/system/update-status'),
   /** 检测新版本；force=true 绕过 6 小时缓存 */
-  checkUpdate: (force = false) => get<UpdateCheck>('/api/system/check-update', {force}),
+  checkUpdate: (force = false) =>
+    // force 时同时绕过本地 GET 缓存：手动「检查更新」不该拿到 15 秒内的旧结果
+    get<UpdateCheck>('/api/system/check-update', {force}, {force}),
   versions: () => get<Versions>('/api/system/versions'),
   /** 启动一键更新；target: manager | upstream | both */
   startUpdate: (target: 'manager' | 'upstream' | 'both') =>

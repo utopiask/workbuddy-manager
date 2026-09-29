@@ -19,7 +19,7 @@ import {Badge} from '@/components/ui/badge';
 import {Skeleton} from '@/components/ui/skeleton';
 import {AiChatInput, type ChatModelOption} from '@/components/ui/ai-chat-input';
 import {CopyButton} from '@/components/ui/copy-button';
-import {playgroundApi, errText} from '@/lib/api';
+import {playgroundApi, errText, invalidateApiCache} from '@/lib/api';
 import {useAsyncAll} from '@/lib/use-async-data';
 import {withBasePath} from '@/lib/base-path';
 import {notify} from '@/lib/toast';
@@ -256,6 +256,8 @@ export default function PlaygroundPage() {
               size="sm"
               className="rounded-full"
               onClick={() => {
+                // 手动刷新要绕过 lib/api.ts 的 GET 缓存，否则拿到的是 15 秒内的旧列表
+                invalidateApiCache();
                 reloadModels();
                 notify.info(t('playground.modelsRefreshed'));
               }}
