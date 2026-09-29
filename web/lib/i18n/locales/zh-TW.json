@@ -1007,6 +1007,7 @@
     "signedTitleDetail": "發佈包已通過驗簽（{detail}）",
     "unsigned": "未驗簽",
     "unsignedTitle": "本次更新跳過了簽章驗證（WB_SKIP_SIGNATURE=1），包內容未經驗證",
+    "unsignedAllowedTitle": "該發佈包未簽章（缺少 .tar.gz.sig），已按預設策略允許安裝；如需強制拒絕請設 WB_REQUIRE_SIGNATURE=1",
     "newVersion": "發現新版本",
     "newVersionAvailable": "發現可用的新版本",
     "upToDate": "已是最新版本",

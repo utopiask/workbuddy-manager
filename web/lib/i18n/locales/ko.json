@@ -1007,6 +1007,7 @@
     "signedTitleDetail": "릴리스 패키지의 서명 검증을 통과했습니다({detail})",
     "unsigned": "미검증",
     "unsignedTitle": "이번 업데이트는 서명 검증을 건너뛰었습니다(WB_SKIP_SIGNATURE=1). 패키지가 검증되지 않았습니다",
+    "unsignedAllowedTitle": "이 릴리스는 서명되지 않았으며(.tar.gz.sig 없음) 기본 정책에 따라 허용되었습니다. 필수로 하려면 WB_REQUIRE_SIGNATURE=1을 설정하세요",
     "newVersion": "새 버전 발견",
     "newVersionAvailable": "새 버전을 사용할 수 있습니다",
     "upToDate": "이미 최신 버전입니다",

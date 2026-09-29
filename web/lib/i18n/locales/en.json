@@ -1031,6 +1031,7 @@
     "signedTitleDetail": "The release archive passed signature verification ({detail})",
     "unsigned": "Not verified",
     "unsignedTitle": "This update skipped signature verification (WB_SKIP_SIGNATURE=1); the archive was not validated",
+    "unsignedAllowedTitle": "This release is unsigned (no .tar.gz.sig) and was allowed by default; set WB_REQUIRE_SIGNATURE=1 to require a signature",
     "newVersion": "New version found",
     "newVersionAvailable": "A new version is available",
     "upToDate": "Already up to date",
