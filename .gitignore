@@ -134,3 +134,14 @@ stop-all.cmd
 gateway/config.json
 gateway/auths/
 gateway/data/
+
+# ── compose 栈的网关数据目录（workbuddy2api-data/）的运行时数据（严禁提交）──
+# 根 docker-compose.yml 把 ./workbuddy2api-data/{auths,data,config.json} 挂进
+# 面板与网关容器：auths/ 是真实账号凭据，config.json 含 api_key，data/ 是运行
+# 数据。全局的 data/ 与 config.json 已覆盖后两者，但 auths/ 不在其中——这里显式
+# 锚定，确保 compose 部署产生的凭据永远不会被误提交。
+# 用无尾斜杠的写法：check-ignore 对「尚不存在的目录」也要能命中（尾斜杠只匹配
+# 真实目录，全新 clone 上会漏判）。
+/workbuddy2api-data/auths
+/workbuddy2api-data/data
+/workbuddy2api-data/config.json
