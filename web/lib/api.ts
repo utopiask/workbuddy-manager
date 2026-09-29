@@ -5,6 +5,8 @@ import type {Realm} from './realm-context';
 import type {
   UpstreamEndpoint,
   Account,
+  AccountBackup,
+  AccountImportResult,
   CheckinLogPage,
   CreditExpiry,
   CreditsMeta,
@@ -270,6 +272,27 @@ export const accountApi = {
     ),
   restart: (upstreamId?: number | null) =>
     post<{ok: boolean; message: string}>('/api/restart' + groupQs(upstreamId)),
+
+  /**
+   * 导出勾选的账号为一个备份文件（**只读**，不改动任何账号）。
+   *
+   * `items` 每项是「分组 + 该分组下的文件名」，因此可跨分组一次导出多个。
+   * 文件里含完整凭据（accessToken / refreshToken / device_token），属敏感数据。
+   */
+  exportAccounts: (items: {upstream_id: number | null; filename: string}[]) =>
+    post<AccountBackup>('/api/accounts/export', {items}),
+  /**
+   * 导入一个账号备份（**增量**，不删除任何现有账号）。
+   *
+   * `mode` 决定同 uid 已存在时跳过还是覆盖；`restore_groups` 为真时按备份里的
+   * 分组名落回原分组（名字在现配置里找不到则落到 `upstream_id` 指定的目标分组）。
+   */
+  importAccounts: (body: {
+    bundle: AccountBackup;
+    upstream_id?: number | null;
+    mode?: 'skip' | 'overwrite';
+    restore_groups?: boolean;
+  }) => post<AccountImportResult>('/api/accounts/import', body),
 
   /* ── 成长任务一键执行（issue #19）─────────────────────
    * 调用上游自带的 scripts/task_runner.py。full（点亮）会伪造活跃上报，

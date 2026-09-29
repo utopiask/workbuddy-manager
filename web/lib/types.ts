@@ -1121,3 +1121,40 @@ export interface CreatedRedPacket {
   expires_at: number;
   keys: ApiKey[];
 }
+
+/* ── 账号备份（导出 / 导入）────────────────────────────────── */
+
+/**
+ * 备份里的一个账号。`content` 是**原始账号文件**（上游 auths 目录里那份）的完整
+ * JSON，逐字段保留 —— 尤其 `device_token` 这类设备风控凭据。导入时整份写回，
+ * 而不是照已知字段重组（重组会把这些字段静默丢掉）。
+ */
+export interface AccountBackupEntry {
+  uid: string;
+  nickname: string;
+  realm: string;
+  /** 备份时是否为禁用态（`.json.disabled`）；导入后保持一致 */
+  disabled: boolean;
+  /** 来源分组：导出时记下，按分组恢复时据此落回 */
+  group: {id: number | null; name: string};
+  /** 本端备注（按 uid 存于面板库，不在账号文件里） */
+  note: string;
+  content: Record<string, unknown>;
+}
+
+/** 账号备份包：一个文件可装多个账号、可跨分组 */
+export interface AccountBackup {
+  format: string;
+  version: number;
+  exported_at: string;
+  accounts: AccountBackupEntry[];
+}
+
+/** 导入结果：逐类计数 + 未能导入的条目及原因 */
+export interface AccountImportResult {
+  imported: number;
+  overwritten: number;
+  skipped: number;
+  failed: {uid: string; reason: string}[];
+  groups_used: {id: number | null; name: string}[];
+}

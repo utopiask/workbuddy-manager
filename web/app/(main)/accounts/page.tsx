@@ -24,6 +24,8 @@ import {
   StickyNote,
   FolderInput,
   TriangleAlert,
+  Download,
+  Upload,
 } from 'lucide-react';
 import {useHeartbeat} from '@/lib/use-heartbeat';
 import {useAsyncAll} from '@/lib/use-async-data';
@@ -65,6 +67,8 @@ import {AddAccountDialog} from '@/components/common/accounts/AddAccountDialog';
 import {CreditCountdown} from '@/components/common/accounts/CreditCountdown';
 import {AccountNoteDialog} from '@/components/common/accounts/AccountNoteDialog';
 import {MoveAccountDialog} from '@/components/common/accounts/MoveAccountDialog';
+import {ExportAccountsDialog} from '@/components/common/accounts/ExportAccountsDialog';
+import {ImportAccountsDialog} from '@/components/common/accounts/ImportAccountsDialog';
 import {UpstreamFormDialog} from '@/components/common/upstreams/UpstreamFormDialog';
 import {AccountTaskDialog} from '@/components/common/accounts/AccountTaskDialog';
 import {useAuth} from '@/lib/auth-context';
@@ -113,6 +117,9 @@ export default function AccountsPage() {
   const t = useT();
   const {isAdmin} = useAuth();
   const [addOpen, setAddOpen] = useState(false);
+  // 账号备份：导出（跨分组勾选后下载成一个文件）/ 导入（从备份文件恢复）
+  const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   // 备注编辑（issue #67）：记的是**哪个账号**而不是布尔——弹窗要以该账号当前的
   // 备注为初值，否则会拿上一个账号的内容去保存。
   const [noteTarget, setNoteTarget] = useState<Account | null>(null);
@@ -1073,6 +1080,33 @@ export default function AccountsPage() {
                 )}
               </Button>
             )}
+            {/* 账号备份：导出 / 导入。两者都只由管理员操作（涉及明文凭据）。
+                放到「添加账号」旁边、同一排——它们是账号池的整池级操作，
+                与逐个账号的行内按钮不在一个层级。 */}
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => setExportOpen(true)}
+                title={t('accounts.backupExport')}
+              >
+                <Download />
+                <span className="hidden sm:inline">{t('accounts.backupExport')}</span>
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => setImportOpen(true)}
+                title={t('accounts.backupImport')}
+              >
+                <Upload />
+                <span className="hidden sm:inline">{t('accounts.backupImport')}</span>
+              </Button>
+            )}
             {isAdmin && (
               <Button size="sm" className="rounded-full" onClick={() => setAddOpen(true)}>
                 <Plus />
@@ -1461,6 +1495,18 @@ export default function AccountsPage() {
         open={taskTarget !== null}
         onOpenChange={(open) => { if (!open) setTaskTarget(null); }}
         onFinished={reloadAll}
+      />
+      <ExportAccountsDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        groups={groups}
+      />
+      <ImportAccountsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        groups={groups}
+        defaultUpstreamId={groupId}
+        onImported={reloadAll}
       />
     </div>
   );

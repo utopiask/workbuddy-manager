@@ -13,7 +13,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from .. import config, db, security, upstreamsvc
 from ..services import (
-    credits as creditsvc, modelcatalog, reload, tasklog, taskrun, tencent, wb2api,
+    accountbundle, credits as creditsvc, modelcatalog, reload, tasklog, taskrun,
+    tencent, wb2api,
 )
 from ..services.realm import realm_of, supports_checkin
 
@@ -1584,4 +1585,157 @@ async def account_set_disabled(
             + ('，正在重载上游使其生效' if reloaded
                else ('；请手动重启上游以生效' if result.get('changed') else ''))
         ),
+    }
+
+
+# ── 账号导入 / 导出（备份 · 恢复）──────────────────────────────────────
+#
+# 勾选任意账号（可跨分组）导出成一个备份包；导入时按条目落回目标分组。文件含
+# 完整凭据，故仅管理员可用，且两件事都留审计。格式与校验见 services/accountbundle。
+
+@router.post('/accounts/export')
+async def account_export(body: dict = Body(...),
+                         user: dict = Depends(security.require_admin)) -> dict:
+    """导出勾选的账号为一个备份包（**只读、无副作用**）。
+
+    body: `{items: [{upstream_id, filename}]}`。逐条目在它所属**分组**的账号目录里
+    读**原始文件内容**（`.disabled` 形态也认），连同备注与来源分组一起打包——
+    `content` 存整份原始文件，导入时才能逐字段还原（含 device_token）。
+    """
+    items = body.get('items')
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=400, detail='请至少选择一个账号')
+    notes = db.account_notes()
+    entries: list[dict] = []
+    for it in items:
+        if not isinstance(it, dict):
+            raise HTTPException(status_code=400, detail='items 里每一项都必须是对象')
+        group = _group(it.get('upstream_id'))
+        base_dir = _require_dir(group)
+        filename = str(it.get('filename') or '')
+        try:
+            raw = wb2api.read_account_file_any(filename, base_dir)
+        except (ValueError, FileNotFoundError) as exc:
+            raise HTTPException(
+                status_code=404, detail=f'账号文件读不到：{filename}') from exc
+        acct = raw.get('account') or {}
+        auth = raw.get('auth') or {}
+        uid = str(acct.get('uid') or '')
+        # 禁用态以**磁盘上的真实形态**为准，而不是只信传进来的文件名：界面在
+        # 「刚停用、心跳还没刷新」时仍持旧名，只看后缀会把禁用号导成启用号。
+        if filename.endswith('.disabled'):
+            disabled = True
+        else:
+            disabled = not (base_dir / filename).exists()
+        entries.append({
+            'uid': uid,
+            'nickname': str(acct.get('nickname') or ''),
+            'realm': str(auth.get('realm') or ''),
+            'disabled': disabled,
+            'group': {'id': group.get('id'), 'name': group.get('name')},
+            'note': notes.get(uid, ''),
+            'content': raw,
+        })
+    security.audit(user, 'export_accounts', '', f'导出 {len(entries)} 个账号')
+    return accountbundle.build(entries)
+
+
+@router.post('/accounts/import')
+async def account_import(body: dict = Body(...),
+                         user: dict = Depends(security.require_admin)) -> dict:
+    """把一个备份包导入到目标分组（**增量**：默认跳过已存在，可选覆盖）。
+
+    body: `{bundle, upstream_id, mode?, restore_groups?}`。
+
+      · `mode`：`skip`（默认，同 uid 已存在则不覆盖）/ `overwrite`（覆盖）。
+      · `restore_groups`：为真时按条目记录的**分组名**落回原分组；名字在现配置
+        里找不到（分组被删/改名）就落到 `upstream_id` 指定的目标分组。
+
+    单条非法（uid 形态、缺 accessToken、目标分组没有本地目录）**不阻断其余**：
+    记进 `failed` 返回。整包格式不对则 400。
+
+    导入后逐条触发上游重载：新账号要进池，靠热加载或重启（见 reload 模块）。
+    """
+    try:
+        entries = accountbundle.parse(body.get('bundle'))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    mode = str(body.get('mode') or 'skip').strip().lower()
+    if mode not in ('skip', 'overwrite'):
+        raise HTTPException(status_code=400, detail='mode 只能是 skip 或 overwrite')
+    restore_groups = bool(body.get('restore_groups'))
+
+    target = _group(body.get('upstream_id'))
+    by_name: dict[str, dict] = {}
+    if restore_groups:
+        for g in upstreamsvc.list_upstreams():
+            by_name.setdefault(str(g.get('name') or ''), g)
+
+    imported = overwritten = skipped = 0
+    failed: list[dict] = []
+    used: dict = {}
+    written: list[tuple[str, dict]] = []
+
+    for entry in entries:
+        uid = ''
+        try:
+            if not isinstance(entry, dict):
+                raise ValueError('条目不是 JSON 对象')
+            content = entry.get('content')
+            if not isinstance(content, dict):
+                raise ValueError('条目缺少 content（原始账号文件）')
+            uid = str(entry.get('uid')
+                      or (content.get('account') or {}).get('uid') or '')
+            if not str((content.get('auth') or {}).get('accessToken') or ''):
+                raise ValueError('凭据不完整：缺少 accessToken')
+            disabled = bool(entry.get('disabled'))
+            filename = accountbundle.entry_filename(uid, disabled)
+
+            grp = target
+            if restore_groups:
+                name = str((entry.get('group') or {}).get('name') or '')
+                grp = by_name.get(name) or target
+            d = _group_dir(grp)
+            if d is None:
+                raise ValueError(f"分组「{grp['name']}」没有配置本地账号目录")
+            path = d / filename
+
+            # 备注与账号文件是两回事：即使文件因已存在被跳过，备注也照常恢复
+            # ——「这个号是谁」正是灾难恢复时最想保住的信息。
+            note = ' '.join(str(entry.get('note') or '').split())[:100]
+            if note:
+                db.set_account_note(uid, note)
+
+            if path.exists() and mode == 'skip':
+                skipped += 1
+                continue
+            existed = path.exists()
+            d.mkdir(parents=True, exist_ok=True)
+            # 复用上游同款原子写：热加载不会读到半截文件，权限也按跨 uid 读取放宽。
+            tencent._atomic_write_json(path, content)
+            used[grp.get('id')] = grp
+            written.append((uid, grp))
+            if existed:
+                overwritten += 1
+            else:
+                imported += 1
+        except ValueError as exc:
+            failed.append({'uid': uid, 'reason': str(exc)})
+        except OSError as exc:
+            failed.append({'uid': uid, 'reason': f'写入失败：{exc}'})
+
+    for uid, grp in written:
+        reload.request_reload_or_restart(uid, upstream=_reload_target(grp))
+
+    security.audit(
+        user, 'import_accounts', '',
+        f'导入 {imported} 新增 / {overwritten} 覆盖 / {skipped} 跳过 / {len(failed)} 失败')
+    return {
+        'imported': imported,
+        'overwritten': overwritten,
+        'skipped': skipped,
+        'failed': failed,
+        'groups_used': [{'id': g.get('id'), 'name': g.get('name')}
+                        for g in used.values()],
     }
