@@ -1,11 +1,27 @@
-# WorkBuddy Manager —— Docker Compose 部署
+# WorkBuddy Manager —— Docker Compose 部署（一个栈：面板 + 网关）
 #
 # 用法：
-#   1) 按需修改下面的环境变量（至少确认上游地址与路径）
-#   2) docker compose up -d --build
-#   3) 浏览器打开 http://<服务器IP>:7864
+#   1) 首次准备网关数据目录与配置（compose 不会自动创建，config.json 必须是文件，
+#      否则 docker 会把它建成目录、网关起不来）：
+#        mkdir -p workbuddy2api-data/auths workbuddy2api-data/data
+#        cp gateway/config.example.json workbuddy2api-data/config.json
+#      （发布包里网关源码在 upstream/：cp upstream/config.example.json ...）
+#   2) 按需修改下面的环境变量
+#   3) docker compose up -d --build
+#   4) 浏览器打开 http://<服务器IP>:7864
 #      首次启动若未设 WB_ADMIN_PASSWORD，会随机生成密码并打印到容器日志：
 #      docker compose logs workbuddy-manager | grep -A2 密码
+#
+# 拓扑：**只有面板对外**（127.0.0.1:7864）。网关 `workbuddy2api` 只在 compose
+# 内网，面板经服务名 http://workbuddy2api:7863 访问它——不映射宿主端口。
+#
+# ── 多账号池分组：必须保留，不要压成单实例 ─────────────────────
+# 上游支持把账号按「分组」拆到多个实例上跑（server/upstreamsvc.py 决定每个分组
+# 用哪个实例名/端口）。本文件只起**默认分组**的网关实例；要加额外分组，另建一个
+# `docker-compose.override.yml`，照着下面 workbuddy2api 复制一份起第二个实例
+# （例如 workbuddy2api-b，容器内监听 7863、映射宿主 127.0.0.1:7865），再在面板的
+# 「上游」设置里把该分组指向 http://workbuddy2api-b:7863（或对应的实例名）。
+# **不要**为了“简化”把所有分组塞进同一个实例——那会改变分组语义。
 #
 # 与宿主机安装（deploy/install.sh + systemd）的区别，见 Dockerfile 顶部说明。
 # 简述：容器版**能**在界面上更新上游 —— 镜像内置了 docker CLI 与 compose 插件，
@@ -13,6 +29,27 @@
 # 不挂 docker.sock 时那几项会降级为「请到宿主机操作」，界面如实提示。
 
 services:
+  # ── 网关（Go 反代）：仅 compose 内网 ──────────────────────────
+  workbuddy2api:
+    # 仓库内开发目录是 gateway/；发布包内会被改名为 upstream/（见 release.yml）。
+    build: ./gateway
+    container_name: workbuddy2api
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      # auths/ 与 data/ 用本地目录（与面板共享同一份，见下方 workbuddy-manager）。
+      # 网关以 app(uid 10001) 读写，宿主目录属主不对会「0 个账号」，必要时：
+      #   chown -R 10001:10001 workbuddy2api-data/auths workbuddy2api-data/data
+      - ./workbuddy2api-data/auths:/app/auths
+      - ./workbuddy2api-data/data:/app/data
+      # config.json 只读：面板负责写，网关重启后读取（改动需重启网关才生效）。
+      - ./workbuddy2api-data/config.json:/app/config.json:ro
+    # 不写 ports：网关持有账号池凭据，只允许面板经内网按服务名访问。
+    networks:
+      - workbuddy
+
+  # ── 面板（管理端）：唯一对外入口 ──────────────────────────────
   workbuddy-manager:
     build:
       context: .
@@ -62,10 +99,8 @@ services:
       TZ: Asia/Shanghai
       # 首启管理员密码；不设则随机生成并打印到日志（推荐首启后立即改）
       # WB_ADMIN_PASSWORD: "改成你的强密码"
-      # 上游地址：若上游与本品在同一 compose 网络，用服务名；否则填宿主机地址
-      #   - 同网络（推荐）：http://workbuddy2api:7863
-      #   - 用宿主机 Docker 网关：http://host.docker.internal:7863
-      WB2API_BASE: http://host.docker.internal:7863
+      # 上游地址：本栈内直接按 compose 服务名访问同一网络里的网关（无需宿主端口）。
+      WB2API_BASE: http://workbuddy2api:7863
       # 可选：子路径部署前缀，必须与上面 build.args.BASE_PATH 完全一致（留空则都不填）。
       # 服务端用它补回响应里漏掉的站内地址，并在反代保留前缀时把前缀剥掉。
       # 详见 deploy/README.md 的「子路径部署」。
@@ -74,6 +109,10 @@ services:
       WB_TRUST_PROXY: "1"
       # 生产环境不暴露 /docs 与 /openapi.json
       WB_ENABLE_DOCS: "0"
+      # 上游数据文件的容器内路径保持默认：AUTH_DIR=/opt/workbuddy2api/auths、
+      # UPSTREAM_CONFIG=/opt/workbuddy2api/config.json、UPSTREAM_DIR=/opt/workbuddy2api。
+      # 下面把本地 workbuddy2api-data/ 整体挂到 /opt/workbuddy2api，于是面板读写的
+      # 正是网关用的同一份 config.json 与 auths/（账号管理因此继续可用）。
     ports:
       # **只监听本机**：管理端必须藏在反向代理之后。
       # 若确需直接从别的机器访问，改成 "7864:7864"，但请先确保有 HTTPS 与访问控制——
@@ -96,23 +135,20 @@ services:
       #   volumes:
       #     wb-manager-data:
       - ./data:/app/data
-      # 上游**整个仓库目录**。一次挂载覆盖下面三件事（分开挂子路径会互相重叠，
-      # 反而让权限语义变模糊）：
-      #   · 读/写上游 config.json —— 管理端「设置」页保存的目标
+      # 网关的**数据目录**（auths/ + data/ + config.json），与上面的 workbuddy2api
+      # 挂的是宿主机上同一份目录：
+      #   · 读/写 config.json —— 管理端「设置」页保存的目标
       #   · 读/写 auths/ —— 扫码添加账号会落盘 workbuddy-<uid>.json（见
       #     tencent.write_auth_file），所以**不能只读**
-      #   · 读上游 docker-compose.yml 做端口收敛；「更新上游」时在容器内
-      #     git fetch/pull 并重建上游容器
+      # 容器内路径 /opt/workbuddy2api 与 WB_UPSTREAM_DIR / WB_AUTH_DIR /
+      # WB_UPSTREAM_CONFIG 的默认值一致，无需额外设环境变量。
       #
       # **权限提示（与上游 issue #108 同款问题）**：bind mount 的目录属主由宿主机
       # 决定，镜像内的 chown 不起作用。若管理端显示「0 个账号」而 auths 里明明有
       # 文件，或添加账号报权限错误，通常是跨 uid 读写不到——宿主机执行一次：
-      #   chown -R 10001:10001 ../workbuddy2api/auths
-      # （10001 是上游容器内进程的 uid，管理端也用同一 uid，见 Dockerfile）
-      #
-      # 若你**不想**让管理端碰上游仓库（例如上游由别人维护），改成只挂 config.json
-      # 与 auths/ 两条子路径即可：此时「更新上游」会不可用，界面会如实提示。
-      - ../workbuddy2api:/opt/workbuddy2api
+      #   chown -R 10001:10001 ./workbuddy2api-data/auths
+      # （10001 是网关容器内进程的 uid，管理端也用同一 uid，见 Dockerfile）
+      - ./workbuddy2api-data:/opt/workbuddy2api
       # docker 控制套接字：挂上后容器内的管理端可以像宿主部署那样操作上游容器
       # （保存设置后自动重载 / 读上游日志 / 一键更新上游）。
       #
@@ -125,13 +161,17 @@ services:
       # 自动降级为「请到宿主机执行 docker compose ...」，界面如实提示，不会
       # 静默失败。
       - /var/run/docker.sock:/var/run/docker.sock
-
-    extra_hosts:
-      # 让容器能通过 host.docker.internal 访问宿主机上的上游
-      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:7864/api/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - workbuddy
+
+# 显式声明一个 bridge 网络：两个服务都接入，面板即可按服务名 workbuddy2api 解析。
+# （不依赖 compose 的隐式 default 网络，读起来也更清楚。）
+networks:
+  workbuddy:
+    driver: bridge
