@@ -22,6 +22,9 @@ config.json
 # 开发参考仓库（不提交）
 .ref/
 
+# 根 Makefile 的网关构建产物（make gateway）
+/bin/
+
 # 编辑器 / 系统
 .DS_Store
 .idea/
