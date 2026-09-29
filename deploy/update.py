@@ -744,7 +744,7 @@ def _explain_deploy_risk(rep: Reporter, modified: list[str], added: list[str],
     无法判断严重性——实测有用户专门来问「这要不要紧」。差异本身分三类，
     处理方式完全不同：
 
-      1. 只新增了工具脚本（如 check-upstream.sh）→ **无需任何操作**
+      1. 只新增了工具脚本（如 verify-release.sh）→ **无需任何操作**
       2. 修改了非信任锚文件（如 systemd 单元）→ 看一眼即可，想要新功能就覆盖
       3. 修改了信任锚（update.py / 公钥）→ **必须人工比对**，确认是官方改动
          而非被替换，再覆盖；这是整条供应链防护的最后一关

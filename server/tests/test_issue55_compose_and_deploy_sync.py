@@ -175,7 +175,7 @@ class DeployRiskMessageTest(unittest.TestCase):
 
     def test_added_only_says_no_action_needed(self) -> None:
         rep = _Rep()
-        self.mod._explain_deploy_risk(rep, [], ['check-upstream.sh'], Path('/app/deploy/update.py'))
+        self.mod._explain_deploy_risk(rep, [], ['new-tool.sh'], Path('/app/deploy/update.py'))
         self.assertIn('不影响本次更新', rep.text())
 
 
@@ -199,16 +199,16 @@ class DeploySyncTest(unittest.TestCase):
 
     def test_syncs_modified_and_added_files_with_backup(self) -> None:
         self._write(self.pkg, 'update.py', 'NEW')
-        self._write(self.pkg, 'check-upstream.sh', 'ADDED')
+        self._write(self.pkg, 'new-tool.sh', 'ADDED')
         self._write(self.inst / 'deploy', 'update.py', 'OLD')
 
         rep = _Rep()
         added, modified = self.mod._sync_deploy(self.pkg, self.inst, self.backup, rep)
 
         self.assertEqual(modified, ['update.py'])
-        self.assertEqual(added, ['check-upstream.sh'])
+        self.assertEqual(added, ['new-tool.sh'])
         self.assertEqual((self.inst / 'deploy' / 'update.py').read_text(encoding='utf-8'), 'NEW')
-        self.assertTrue((self.inst / 'deploy' / 'check-upstream.sh').is_file())
+        self.assertTrue((self.inst / 'deploy' / 'new-tool.sh').is_file())
         # 备份必须留下旧内容（出问题要能回退）
         self.assertEqual((self.backup / 'deploy' / 'update.py').read_text(encoding='utf-8'), 'OLD')
         self.assertIn('WB_SYNC_DEPLOY=0', rep.text(), '没告诉用户怎么保持不变')
