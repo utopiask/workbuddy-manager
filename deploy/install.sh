@@ -11,8 +11,8 @@
 #   sudo bash deploy/install.sh --skip-upstream  # 已自备 workbuddy2api
 #   sudo bash APP_DIR=/opt/custom bash deploy/install.sh
 #
-# 上游源码从哪来（按优先级）：
-#   1) 发布包里自带的 upstream/             下载 Release 包时已内嵌，离线可装
+# 网关源码从哪来（按优先级）：
+#   1) 发布包里自带的 upstream/             由仓库 gateway/ 打包进 Release，离线可装
 #   2) UPSTREAM_SRC=<本地目录或 tar.gz>     用你自己那份源码
 #   3) UPSTREAM_REPO=<git 地址>             从 git 拉（默认地址不可用，
 #                                           请指向你自己的副本 fork / 镜像）
@@ -25,9 +25,9 @@ set -euo pipefail
 # ── 可配置项（均可用环境变量覆盖）─────────────────────────
 APP_DIR="${APP_DIR:-/opt/workbuddy-manager}"
 UPSTREAM_DIR="${UPSTREAM_DIR:-/opt/workbuddy2api}"
-# 上游原仓库 Sliverkiss/workbuddy2api 自 2026-09-23 起已不可访问（404）。
-# 默认值保留原地址只为「已有副本的人不必改代码」；新装请用 UPSTREAM_SRC
-# 指向本地源码，或把 UPSTREAM_REPO 改成你自己的副本。
+# 网关源码已随本仓库（gateway/）与发布包（upstream/）分发，正常安装无需联网。
+# 下面这个原上游仓库地址自 2026-09-23 起已不可访问（404），保留默认值只为
+# 「已有 git 副本的人不必改代码」；要换一份源码请用 UPSTREAM_SRC 或改 UPSTREAM_REPO。
 UPSTREAM_REPO="${UPSTREAM_REPO:-https://github.com/Sliverkiss/workbuddy2api.git}"
 UPSTREAM_SRC="${UPSTREAM_SRC:-}"
 UPSTREAM_PORT="${UPSTREAM_PORT:-7863}"
@@ -130,10 +130,9 @@ elif [ -f "${UPSTREAM_DIR}/config.json" ]; then
 else
   info "未检测到上游部署，开始安装到 ${UPSTREAM_DIR}"
 
-  # 上游源码的来源，按优先级：
+  # 网关源码的来源，按优先级：
   #   1) UPSTREAM_SRC 显式指定（目录 / .tar.gz / .zip）
-  #   2) **发布包里自带的 upstream/**（Release 包内嵌，离线可装：上游原仓库
-  #      源码随本项目的发布包分发）
+  #   2) **发布包里自带的 upstream/**（由仓库 gateway/ 打包进 Release 包，离线可装）
   #   3) 目标目录里已有的 .git（老部署，尝试 git pull）
   #   4) 克隆 UPSTREAM_REPO（需要指向你自己的副本）
   if [ -z "$UPSTREAM_SRC" ]; then
