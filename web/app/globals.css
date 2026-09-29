@@ -44,6 +44,15 @@
 }
 
 :root {
+  /* 字体变量：原由 next/font/google 在**构建期**下载字体后生成（会依赖
+     fonts.googleapis.com，受限网络下 next build 直接失败；见 app/layout.tsx）。
+     这里改为纯系统字体栈，变量名保持不变，上面的 --font-sans / --font-mono
+     照常解析。字形回退到系统 CJK 字体（Windows→微软雅黑、macOS→苹方）。 */
+  --font-inter: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-noto-sans-sc: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", sans-serif;
+
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
