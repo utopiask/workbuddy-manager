@@ -222,7 +222,12 @@ export function ExportAccountsDialog({
                             {r.account.uid}
                           </div>
                         </div>
-                        {r.account.disabled ? (
+                        {/* 与账号页同一套判定：面板改名停用、上游状态位停用、
+                            上游按错误自动禁用，三种都算「已停用」。只读
+                            `disabled` 会漏掉前两种——恰恰是最常见的两种。 */}
+                        {r.account.disabled_by_panel === true
+                          || r.account.manual_disabled === true
+                          || r.account.disabled === true ? (
                           <span className="shrink-0 text-[10px] text-muted-foreground">
                             {t('accounts.exportDisabledTag')}
                           </span>
