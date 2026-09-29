@@ -64,7 +64,7 @@ git remote set-url origin git@github.com:ithtelab/workbuddy-manager-private.git
 注意：
 
 - 转私有会**摘掉公开 fork、清空 star/watch**，并开始消耗 Actions 配额；
-- **私有仓库的 Release 资产需要鉴权**（内置更新器不带凭据，见 §8 已知限制）；
+- **私有仓库的 Release 资产需要鉴权**（内置更新器不带凭据，见 §11 已知限制）；
 - 若走方案 B，后续命令里的 `ithtelab/workbuddy-manager` 全部替换为
   `ithtelab/workbuddy-manager-private`（含 `WB_MANAGER_REPO` 与本文下载命令）。
 
@@ -85,13 +85,16 @@ gh pr create --base main --head feat/monorepo \
   --body "将网关收进仓库 gateway/，统一构建 / CI / 发版；运行时行为不变。"
 gh pr merge --merge --admin        # admin 可绕过；或等批准后正常合并
 
-# 合并后本地同步并跑三套闸门
+# 合并后本地同步并跑闸门（make test 不含 web，前端另跑 make web）
 git checkout main && git pull --ff-only
-make test        # gateway: go test ./...   server: unittest discover   web: build
+make test        # gateway: go vet && go test ./...   server: unittest discover
+make web         # web: npm ci && npm run build:export（make build = 网关 go build + make web）
 ```
 
-`make test` 三套必须全绿再进 Step ③（新 CI 也以此为发版闸门）。仓库根 `Makefile` 是
-本地与 CI 共用的入口。
+`make test` 只跑网关（`go vet && go test`）与面板（`unittest discover`）两套，**不构建前端**；
+前端要单独 `make web`（或 `make build`，它再带上网关 `go build`）。新 CI 的发布闸门是
+**gateway / python / web 三个彼此独立的 job**，与 `make test` 并不一一对应——本地在进
+Step ③ 前，请把 `make test` 与 `make web` 都跑绿。仓库根 `Makefile` 是本地与 CI 共用的入口。
 
 ---
 
@@ -129,7 +132,7 @@ gh release upload vX.Y.Z workbuddy-manager-vX.Y.Z.tar.gz.sig \
   --repo ithtelab/workbuddy-manager
 ```
 
-要**强制**「缺签名即拒绝」的部署，在目标机设 `WB_REQUIRE_SIGNATURE=1`（见 §7）。
+要**强制**「缺签名即拒绝」的部署，在目标机设 `WB_REQUIRE_SIGNATURE=1`（见 §8）。
 
 ---
 
@@ -160,8 +163,10 @@ sudo bash deploy/install.sh
 
 - 检测到 `/opt/workbuddy2api/config.json` → 打印「已存在上游部署，**保留现有配置与账号**」，
   确保网关容器在运行；**不会覆盖** `config.json` / `auths/` / `data/`；
-- 把面板代码（`server/`、`deploy/`、`web/out/`、README/CHANGELOG）同步进
+- 把面板代码（`server/`、`deploy/`、README/CHANGELOG）同步进
   `/opt/workbuddy-manager`，重装依赖并重注册 systemd `workbuddy-web`；
+- **有意保留**已存在的 `.version` 与 `web/out/`：只在缺失时才写入/复制。所以覆盖安装后
+  这两者仍是**旧值**（由之后的一键更新负责替换），不要据此判断迁移失败；
 - 结束后打印访问地址与初始密码。
 
 > 网关**代码**的随包同步与重建由 §6 的「一键更新」完成（`install.sh` 对已存在的上游只保证
@@ -193,7 +198,7 @@ diff -u /root/wb-account-count-pre.txt /root/wb-account-count-post.txt && echo "
 
 | 项目 | 升级前 | 升级后 | 一致？ | 备注 |
 |---|---|---|---|---|
-| 面板版本 `.version` | | | | 应变为 `vX.Y.Z` |
+| 面板版本 `.version` | | | | 覆盖安装**保留旧值**；一键更新后才变为 `vX.Y.Z` |
 | `config.json` sha256 | | | | 含 `api_key`，必须一致 |
 | `auths/` 文件数 | | | | 账号数 |
 | `auths/` 哈希清单 sha256 | | | | `sha256sum wb-migration-*.sha256` |
@@ -204,6 +209,10 @@ diff -u /root/wb-account-count-pre.txt /root/wb-account-count-post.txt && echo "
 | systemd `workbuddy-web` | | | | `systemctl is-active workbuddy-web` |
 
 **预期**：账号、配置、数据零丢失；面板与网关均可用。
+
+> **覆盖安装不刷新 `.version` 与 `web/out`**：`install.sh` 有意保留已存在的这两者，
+> 由之后的一键更新（§6.4）替换。因此覆盖安装后它们与发布包版本不一致是**预期**，
+> 不要记为迁移引入的差异。
 
 > 关于「逐字节一致」：网关运行期会主动刷新 token、写 `data/state.json`，因此 `auths/` 内
 > 个别文件的字节或 `data/` 哈希**可能**随运行时间自然变化。若 `diff` 有差异，先判断是不是
@@ -267,7 +276,7 @@ curl -s http://127.0.0.1:7863/v1/chat/completions \
   ```
 
 期望：更新成功；账号授权、网关配置、密钥与日志数据都保留；更新报告里有一条签名状态
-（默认未签名时为 `warn`，见 §7）。随后重复 §5 的对比表，确认三样数据仍一致。
+（默认未签名时为 `warn`，见 §8）。随后重复 §5 的对比表，确认三样数据仍一致。
 
 ---
 
