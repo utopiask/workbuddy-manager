@@ -1,7 +1,6 @@
 # Monorepo 迁移 runbook（一次性）
 
-本文是把网关 `workbuddy2api` 并入 `workbuddy-manager` 私有仓库后的**一次性迁移手册**，
-对应设计 `docs/superpowers/specs/2026-09-29-workbuddy-monorepo-design.md` §6。
+本文是把网关 `workbuddy2api` 并入 `workbuddy-manager` 私有仓库后的**一次性迁移手册**。
 
 Phase 1 **不改变任何运行时行为**：面板仍是唯一入口（`:7864`），网关仍是内部数据面
 （`:7863`），账号数据（`config.json` / `auths/` / `data/`）**零迁移**。迁移做的事只有三件：
