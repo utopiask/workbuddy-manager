@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import security
+from .. import config, security
 from ..services import changelog, updater, wb2api
 
 router = APIRouter(prefix='/api/system', tags=['system'])
@@ -32,6 +32,8 @@ def update_status(user: dict = Depends(security.current_user)) -> dict:
     """更新进度与当前版本（含运行中的日志）。"""
     status = updater.read_status()
     status['log_tail'] = updater.tail_log(80)
+    # 界面据此隐藏更新入口并说明原因（见 WB_DISABLE_UPDATE）
+    status['update_disabled'] = config.DISABLE_UPDATE
     return status
 
 
@@ -74,6 +76,17 @@ def check_update(force: bool = False, user: dict = Depends(security.current_user
     结果缓存 6 小时以免触发 GitHub 限流；`force=true` 可强制刷新，
     但会打 GitHub API（未认证配额有限），因此只允许管理员强制刷新。
     """
+    if config.DISABLE_UPDATE:
+        # 停用后不再打 GitHub：既省未认证配额，也避免界面出现「检测失败」的红字。
+        # 结构与正常结果一致，只多一个 disabled 标记 —— 调用方（版本徽章 / 更新面板）
+        # 据此直接跳过，不需要各自处理一种新形状。
+        return {
+            'checked_at': 0, 'cached': False, 'disabled': True, 'has_any': False,
+            'manager': {'current': updater.current_version(), 'latest': '',
+                        'has_update': False, 'error': '', 'url': '', 'repo': ''},
+            'upstream': {'current': '', 'latest': '', 'has_update': False,
+                         'error': '', 'date': '', 'subject': ''},
+        }
     if force and user.get('role') != 'admin':
         force = False
     return updater.check_updates(force=force)

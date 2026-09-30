@@ -834,6 +834,11 @@ export interface UpdateStatus {
    * none 或缺失 = 未执行验签（如旧版本更新器）。
    */
   signature?: {status: 'verified' | 'skipped' | 'none'; detail?: string};
+  /**
+   * 本部署是否停用了「一键更新」（服务端 `WB_DISABLE_UPDATE=1`）。
+   * 为真时界面隐藏更新入口并说明原因；动作本身也已被服务端拒绝。
+   */
+  update_disabled?: boolean;
 }
 
 export interface VersionSide {
@@ -885,6 +890,8 @@ export interface UpdateCheck {
   upstream: UpstreamVersion;
   /** 任一组件有更新 */
   has_any: boolean;
+  /** 本部署停用了更新（`WB_DISABLE_UPDATE=1`）——此时不会去打 GitHub，结果为空 */
+  disabled?: boolean;
 }
 
 export interface Versions {

@@ -1026,6 +1026,7 @@
   "updatePanel": {
     "currentVersion": "当前版本",
     "checkUpdate": "检测更新",
+    "disabledNote": "此部署已停用「一键更新」（`WB_DISABLE_UPDATE=1`）。请在宿主机手动升级。",
     "manager": "管理端",
     "upstreamConn": "上游连接",
     "connOk": "正常",

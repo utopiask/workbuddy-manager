@@ -376,6 +376,10 @@ def _write_initial_status(target: str, pid: int) -> None:
 
 def start_update(target: str) -> tuple[bool, str]:
     """启动更新（后台脱离运行）。返回 (是否已启动, 说明)。"""
+    if config.DISABLE_UPDATE:
+        # 由**服务端**闸门拦住，而不是靠前端把按钮藏起来——否则「停用」只是一层
+        # 可以绕过的皮（任何人拿会话直接打这个接口就能触发自我更新）。
+        return False, '一键更新已停用（WB_DISABLE_UPDATE=1）；请在宿主机手动升级'
     if target not in ('manager', 'upstream', 'both'):
         return False, '参数不合法'
     if os.name == 'nt' and config.WB2API_MODE == 'native':

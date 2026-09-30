@@ -1050,6 +1050,7 @@
   "updatePanel": {
     "currentVersion": "Current version",
     "checkUpdate": "Check for updates",
+    "disabledNote": "One-click update is disabled on this deployment (`WB_DISABLE_UPDATE=1`). Upgrade manually on the host.",
     "manager": "Manager",
     "upstreamConn": "Upstream",
     "connOk": "Online",

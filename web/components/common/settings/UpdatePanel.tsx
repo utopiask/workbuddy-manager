@@ -155,6 +155,9 @@ export function UpdatePanel() {
   /** 上一次更新已经结束（成功或失败）——有结果可清除 */
   const hasResult = !!status && !status.running && status.ok !== null;
 
+  /** 本部署是否停用了更新（服务端 WB_DISABLE_UPDATE=1；界面据此隐藏入口） */
+  const updateDisabled = !!status?.update_disabled;
+
   /**
    * 清除上次更新的结果与日志（issue #105）。
    *
@@ -223,6 +226,7 @@ export function UpdatePanel() {
             {t('updatePanel.currentVersion')}
           </div>
           <div className="flex items-center gap-2">
+            {!updateDisabled && (
             <Button
               variant="outline"
               size="sm"
@@ -233,6 +237,7 @@ export function UpdatePanel() {
               <RefreshCw className={checking ? 'animate-spin' : ''} />
               {t('updatePanel.checkUpdate')}
             </Button>
+            )}
             <Button variant="outline" size="sm" className="rounded-full" onClick={load} disabled={running}>
               <RefreshCw className={running ? 'animate-spin' : ''} />
               {t('common.refresh')}
@@ -433,7 +438,8 @@ export function UpdatePanel() {
         </div>
       )}
 
-      {check && !check.has_any && !check.manager.error && !check.upstream.error && !status?.running && (
+      {check && !check.has_any && !check.manager.error && !check.upstream.error
+        && !status?.running && !updateDisabled && (
         <div className="flex items-center gap-2 rounded-[20px] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
           <span className="text-xs">{t('updatePanel.allUpToDate')}</span>
@@ -518,7 +524,18 @@ export function UpdatePanel() {
         </div>
       )}
 
-      {/* 更新操作 */}
+      {/* 更新操作：停用时只留一句说明（入口在服务端也已被拒绝，不靠前端藏按钮） */}
+      {updateDisabled ? (
+        <div className="flex items-start gap-2.5 rounded-[20px] bg-muted p-4">
+          <ShieldOff className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="text-sm font-medium">{t('updatePanel.oneClickUpdate')}</div>
+            <div className="text-[11px] leading-4 text-muted-foreground">
+              <RichText text={t('updatePanel.disabledNote')} />
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="rounded-[20px] bg-muted p-4">
         <div className="mb-1 text-sm font-medium">{t('updatePanel.oneClickUpdate')}</div>
         <div className="mb-3 text-[11px] leading-4 text-muted-foreground">
@@ -573,8 +590,11 @@ export function UpdatePanel() {
           <p className="mt-2 text-[11px] text-muted-foreground">{t('updatePanel.readonlyNote')}</p>
         )}
       </div>
+      )}
 
-      {/* 上游版本固定：上游某个提交自身有问题时，固定回上一个可用提交 */}
+      {/* 上游版本固定：上游某个提交自身有问题时，固定回上一个可用提交。停用更新时
+          没有更新可固定，这个开关也一并收起来。 */}
+      {!updateDisabled && (
       <div className="rounded-[20px] bg-muted p-4">
         <div className="mb-1 flex flex-wrap items-center gap-2 text-sm font-medium">
           <Pin className="h-4 w-4" />
@@ -636,6 +656,7 @@ export function UpdatePanel() {
           )}
         </div>
       </div>
+      )}
 
       {/* 日志。**没有可看的内容时不渲染这块**（issue #105：一次失败会长期驻留，
           清掉记录后这里还应整块消失，而不是永远挂着一个空框）。 */}
