@@ -24,9 +24,7 @@ analytics; installs and updates come from a release package (signature optional)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e)
 
-[![Release](https://img.shields.io/github/v/release/utopiask/workbuddy-manager?color=22c55e&label=Release)](https://github.com/utopiask/workbuddy-manager/releases)
 [![Changelog](https://img.shields.io/badge/Changelog-CHANGELOG-blue)](CHANGELOG.md)
-[![Issues](https://img.shields.io/github/issues/utopiask/workbuddy-manager?color=f59e0b&label=Issues)](https://github.com/utopiask/workbuddy-manager/issues)
 [![LINUX DO](https://img.shields.io/badge/Community-LINUX%20DO-1f6feb)](https://linux.do)
 
 **English** · [简体中文](README.md)
@@ -633,9 +631,8 @@ copy instead, see the
 [deployment guide](deploy/README.md#〇网关源码从哪来随发布包分发).
 
 ```bash
-# Recommended: use the release package (includes the built frontend, no Node.js needed)
-wget https://github.com/utopiask/workbuddy-manager/releases/latest/download/workbuddy-manager-<version>.tar.gz
-tar xzf workbuddy-manager-*.tar.gz && cd workbuddy-manager-*
+git clone https://github.com/utopiask/workbuddy-manager.git
+cd workbuddy-manager
 
 sudo bash deploy/install.sh
 ```
@@ -913,8 +910,6 @@ workbuddy-manager/
 2. **Always access over HTTPS**: bind 7863 / 7864 to `127.0.0.1` only and expose them
    through a reverse proxy
 3. If you put a CDN in front, set `WB_TRUSTED_PROXY_HOPS` to the number of proxy layers
-4. Report issues through the [private channel](https://github.com/utopiask/workbuddy-manager/security/advisories/new),
-   **not** a public issue
 
 > ⚠️ Public exposure **requires** HTTPS, otherwise session cookies and passwords can be
 > intercepted by a man-in-the-middle. Additional IP allowlisting or an access proxy is
@@ -934,19 +929,9 @@ workbuddy-manager/
 
 ---
 
-## Changelog & feedback
+## Changelog
 
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md) — additions, fixes and changes per version
-- **Releases**: [Releases](https://github.com/utopiask/workbuddy-manager/releases) — each
-  version ships a deployable `.tar.gz` / `.zip` (with the built frontend); unpack and run
-  `sudo bash deploy/install.sh`
-- **Feedback**: [report a bug](https://github.com/utopiask/workbuddy-manager/issues/new?template=bug_report.yml) ·
-  [request a feature](https://github.com/utopiask/workbuddy-manager/issues/new?template=feature_request.yml)
-
-> Please include the version and error logs, and **remove any keys or tokens first**.
-> For issues with the gateway `gateway/` (workbuddy2api) itself, use
-> [this repository](https://github.com/utopiask/workbuddy-manager/issues) — the gateway
-> source is part of this repository and ships with our releases.
 
 ### Release process
 

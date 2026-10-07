@@ -186,6 +186,4 @@ proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # 追加，首段�
 python -m pytest  # 或按 tests/ 下的说明执行
 ```
 
-如发现新的安全问题，请通过
-[私密渠道](https://github.com/utopiask/workbuddy-manager/security/advisories/new)
-报告，**不要**公开提交 Issue。
+如发现新的安全问题，请**私下**联系维护者，**不要**公开提交 Issue。

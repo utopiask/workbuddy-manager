@@ -22,13 +22,13 @@
 
 ### 包内自带，开箱即用
 
-最新版本的 Release 包内含 `upstream/`（网关源码），装的时候直接用，
+网关源码已随仓库提供（`gateway/`），装的时候直接用，
 **不需要联网取任何外部源码**：
 
 ```bash
-wget https://github.com/utopiask/workbuddy-manager/releases/latest/download/workbuddy-manager-<版本>.tar.gz
-tar xzf workbuddy-manager-*.tar.gz && cd workbuddy-manager-*
-sudo bash deploy/install.sh          # 自动使用包内的 upstream/
+git clone https://github.com/utopiask/workbuddy-manager.git
+cd workbuddy-manager
+sudo bash deploy/install.sh          # 自动使用仓库内的 gateway/
 ```
 
 要改用你自己那份源码（或机器上已有的 `/opt/workbuddy2api`），按下面的优先级覆盖：
@@ -69,15 +69,14 @@ cd /opt/workbuddy2api && docker compose up -d --build
 
 ---
 
-## 一、最简单的方式：Release 包 + 一键脚本
+## 一、最简单的方式：源码 + 一键脚本
 
 ```bash
-# 1) 下载 Release 包（内含已构建的前端，无需 Node.js）
-wget https://github.com/utopiask/workbuddy-manager/releases/latest/download/workbuddy-manager-<版本>.tar.gz
-tar xzf workbuddy-manager-*.tar.gz
-cd workbuddy-manager-*
+# 1) 取源码（网关源码在 gateway/ 内，无需另外下载）
+git clone https://github.com/utopiask/workbuddy-manager.git
+cd workbuddy-manager
 
-# 2) 一键部署（自动识别包内 upstream/ 网关源码；要换一份用 UPSTREAM_SRC，见上一节）
+# 2) 一键部署（自动识别仓库内 gateway/ 网关源码；要换一份用 UPSTREAM_SRC，见上一节）
 sudo bash deploy/install.sh
 ```
 

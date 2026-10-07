@@ -20,9 +20,7 @@ Web 管理端，以及网关本体 `gateway/`：扫码批量纳管账号、定�
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e)
 
-[![Release](https://img.shields.io/github/v/release/utopiask/workbuddy-manager?color=22c55e&label=Release)](https://github.com/utopiask/workbuddy-manager/releases)
 [![Changelog](https://img.shields.io/badge/更新日志-CHANGELOG-blue)](CHANGELOG.md)
-[![Issues](https://img.shields.io/github/issues/utopiask/workbuddy-manager?color=f59e0b&label=反馈)](https://github.com/utopiask/workbuddy-manager/issues)
 [![LINUX DO](https://img.shields.io/badge/社区-LINUX%20DO-1f6feb)](https://linux.do)
 
 [English](README.en.md) · **简体中文**
@@ -537,14 +535,13 @@ docker pull ghcr.io/<你的用户名>/workbuddy-manager-multiarch:latest
 
 ### 四、部署到服务器（一键脚本）
 
-本项目由面板与网关 `gateway/` 两个组件构成，网关源码已随仓库提供（发布包内目录名为
-`upstream/`），一键脚本会装好两者；要改用自己那份源码见
+本项目由面板与网关 `gateway/` 两个组件构成，网关源码已随仓库提供，一键脚本会装好
+两者；要改用自己那份源码见
 [部署指南](deploy/README.md#〇网关源码从哪来随发布包分发)：
 
 ```bash
-# 推荐：用 Release 包（内含已构建的前端，无需 Node.js）
-wget https://github.com/utopiask/workbuddy-manager/releases/latest/download/workbuddy-manager-<版本>.tar.gz
-tar xzf workbuddy-manager-*.tar.gz && cd workbuddy-manager-*
+git clone https://github.com/utopiask/workbuddy-manager.git
+cd workbuddy-manager
 
 sudo bash deploy/install.sh
 ```
@@ -826,8 +823,6 @@ workbuddy-manager/
 1. **改掉初始密码**，不要沿用部署脚本中的默认值
 2. **务必经 HTTPS 访问**：7863 / 7864 建议只监听 `127.0.0.1`，由反向代理对外
 3. 如需前置 CDN，请把 `WB_TRUSTED_PROXY_HOPS` 设为 CDN + 反代的层数
-4. 发现问题请走[私密渠道](https://github.com/utopiask/workbuddy-manager/security/advisories/new)，
-   **不要**公开提交 Issue
 
 > ⚠️ 公网暴露**必须**启用 HTTPS，否则会话 Cookie 与密码可被中间人窃取。
 > 建议再叠加 1Panel IP 白名单或 Cloudflare Access 加固。
@@ -842,17 +837,9 @@ workbuddy-manager/
 
 ---
 
-## 更新日志与反馈
+## 更新日志
 
 - **更新日志**：[CHANGELOG.md](CHANGELOG.md) —— 各版本的新增、修复与变更
-- **下载发布包**：[Releases](https://github.com/utopiask/workbuddy-manager/releases) —— 每个版本提供可直接部署的
-  `.tar.gz` / `.zip`（含已构建的前端产物），解压后执行 `sudo bash deploy/install.sh` 即可
-- **反馈问题**：[提交 Bug](https://github.com/utopiask/workbuddy-manager/issues/new?template=bug_report.yml) ·
-  [功能建议](https://github.com/utopiask/workbuddy-manager/issues/new?template=feature_request.yml)
-
-> 反馈时请附上版本号与错误日志，并**先移除其中的密钥、Token 等敏感信息**。
-> 网关 `gateway/`（workbuddy2api）自身的问题也提到[本仓库](https://github.com/utopiask/workbuddy-manager/issues)
-> ——网关源码已收入本仓库并随发布包分发。
 
 ### 版本发布流程
 
